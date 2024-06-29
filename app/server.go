@@ -3,25 +3,10 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"net"
 	"os"
-	"strings"
 )
-
-type messageOutput[T any, U any] func(T) (U, error)
-type message[T any, U any] struct {
-	input  string
-	output messageOutput[T, U]
-}
-
-// type messageProcessors[T any, U any] map[string]message[T, U]
-
-var pingMessage message[string, string] = message[string, string]{
-	input: "PING",
-	output: func(i string) (string, error) {
-		return "+PONG\r\n", nil
-	},
-}
 
 func main() {
 	// You can use print statements as follows for debugging, they'll be visible when running tests.
@@ -48,27 +33,63 @@ func main() {
 
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
+
 	fmt.Println("Client connected")
 
-	for {
-		message, err := bufio.NewReader(conn).ReadString('\n')
+	respProcessor := NewRESPMessageReader()
+	reader := bufio.NewReader(conn)
 
+	for {
+		message, err := reader.ReadString('\n')
 		if err != nil {
-			fmt.Println("Client disconnected")
+			if err == io.EOF {
+				fmt.Println("Connection closed by client")
+				break
+			}
+
+			fmt.Println("Error reading: " + err.Error())
 			return
 		}
 
-		message = strings.TrimRight(message, "\n")
-		returnMessage := ""
+		ready, err := respProcessor.Read(message)
 
-		switch message {
-		case "PING":
-			returnMessage, _ = pingMessage.output("")
-		default:
-			returnMessage, _ = pingMessage.output("")
-			// returnMessage = "Message received: " + message
+		if err != nil {
+			_, err = conn.Write([]byte(err.Error()))
+			if err != nil {
+				fmt.Println("Error writing:", err)
+				return
+			}
 		}
 
-		conn.Write([]byte(returnMessage))
+		if ready {
+			// TODO: implement a command runner
+			command, args := respProcessor.GetCommandAndArgs()
+			result := ExecuteCommand(command, args)
+
+			fmt.Println("rmp command: ", command)
+			fmt.Println("rmp args: ", args)
+			fmt.Printf("processor: \n %+v\n", respProcessor)
+			fmt.Println("result: ", result)
+			fmt.Println([]byte(result))
+			fmt.Println("------------------")
+
+			_, err = conn.Write([]byte(result))
+			if err != nil {
+				fmt.Println("Error writing:", err)
+			}
+			respProcessor.Reset()
+		}
+
+		/* trimmedMessage := strings.TrimSuffix(message, "\r\n")
+		fmt.Printf("Received: %s\n", trimmedMessage)
+
+		// Echo the message back to the client
+		response := trimmedMessage + "\r\n"
+		_, err = conn.Write([]byte(response))
+		if err != nil {
+			fmt.Println("Error writing:", err)
+			return
+		} */
+
 	}
 }
