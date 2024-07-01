@@ -41,6 +41,7 @@ func handleConnection(conn net.Conn) {
 
 	for {
 		message, err := reader.ReadString('\n')
+
 		if err != nil {
 			if err == io.EOF {
 				fmt.Println("Connection closed by client")
@@ -52,6 +53,7 @@ func handleConnection(conn net.Conn) {
 		}
 
 		ready, err := respProcessor.Read(message)
+		//fmt.Printf("processor %#v \n", respProcessor)
 
 		if err != nil {
 			_, err = conn.Write([]byte(err.Error()))
@@ -59,37 +61,23 @@ func handleConnection(conn net.Conn) {
 				fmt.Println("Error writing:", err)
 				return
 			}
+
+			continue
 		}
 
 		if ready {
-			// TODO: implement a command runner
 			command, args := respProcessor.GetCommandAndArgs()
-			result := ExecuteCommand(command, args)
-
-			fmt.Println("rmp command: ", command)
-			fmt.Println("rmp args: ", args)
-			fmt.Printf("processor: \n %+v\n", respProcessor)
-			fmt.Println("result: ", result)
-			fmt.Println([]byte(result))
-			fmt.Println("------------------")
+			result, err := CommandExecutors[command].Execute(args)
+			if err != nil {
+				fmt.Println("Error executing command:", err)
+			}
 
 			_, err = conn.Write([]byte(result))
 			if err != nil {
 				fmt.Println("Error writing:", err)
 			}
+
 			respProcessor.Reset()
 		}
-
-		/* trimmedMessage := strings.TrimSuffix(message, "\r\n")
-		fmt.Printf("Received: %s\n", trimmedMessage)
-
-		// Echo the message back to the client
-		response := trimmedMessage + "\r\n"
-		_, err = conn.Write([]byte(response))
-		if err != nil {
-			fmt.Println("Error writing:", err)
-			return
-		} */
-
 	}
 }

@@ -3,15 +3,9 @@ package main
 import (
 	"fmt"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 )
-
-func isRespCommand(s string) bool {
-	s = strings.ToUpper(s)
-	return slices.Contains([]string{PING, ECHO}, s)
-}
 
 func extractCommandAndArgs(message string) (string, []string) {
 	splitMessage := regexp.MustCompile(`\s\s*`).Split(message, -1)
@@ -61,7 +55,7 @@ func splitFullRespArrayMessage(s string, protocolTerminator string) ([]string, e
 		}
 
 		if len(stringValue) < length {
-			return []string{}, fmt.Errorf("string %s does not have enough length, attempted to read %d", stringValue, length)
+			return []string{}, fmt.Errorf("string does not have enough length, attempted to read %d, actual length is %d", length, len(stringValue))
 		}
 
 		finalMessageParts = append(finalMessageParts, stringValue[:length])

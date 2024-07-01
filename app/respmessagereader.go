@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"io"
 	"regexp"
 	"strings"
 )
@@ -12,6 +11,7 @@ type RESPMessageReader struct {
 	args      []string
 	len       int
 	lenRead   int
+	lenLimit  int
 	nextBytes int
 }
 
@@ -34,19 +34,20 @@ func (r *RESPMessageReader) Read(message string) (bool, error) {
 			return false, nil
 		}
 
-		// sets command
+		// set command or read bulk string of length = nextBytes
 		if r.command == "" {
-			if !isRespCommand(trimmedMessage) {
+			if !IsRESPCommandSupported(strings.ToUpper(trimmedMessage)) {
 				return true, errors.New("invalid or unsupported resp command: " + trimmedMessage)
 			}
-			r.setCommandAndArgs(trimmedMessage, r.args)
-		} else { // reads bulk string of length = nextBytes
-			nextArg := trimmedMessage[:r.nextBytes]
-			r.setCommandAndArgs(r.command, append(r.args, nextArg))
+			r.setCommand(trimmedMessage)
+			r.setLengthLimit(CommandExecutors[r.command].argLen)
+		} else {
+			nextArg := trimmedMessage[:r.nextBytes] // TODO: validate this length
+			r.setArgs(append(r.args, nextArg))
 		}
 
-		r.advancePartialRespRead()
-		if r.len == r.lenRead {
+		ready := r.advancePartialRespRead()
+		if ready {
 			return true, nil
 		}
 
@@ -68,7 +69,8 @@ func (r *RESPMessageReader) Read(message string) (bool, error) {
 			return true, errors.New("failed to read full RESP array: " + err.Error())
 		}
 
-		r.setCommandAndArgs(messageParts[0], messageParts[1:])
+		r.setCommand(messageParts[0])
+		r.setArgs(messageParts[1:])
 		return true, nil
 	}
 
@@ -81,32 +83,40 @@ func (r *RESPMessageReader) Read(message string) (bool, error) {
 	// plain message, with or without command
 	command, args := extractCommandAndArgs(trimmedMessage)
 
-	if !isRespCommand(command) {
-		return true, errors.New("invalid or unsupported command in plain string: " + command)
+	if IsRESPCommandSupported(command) {
+		r.setCommand(command)
+		r.setArgs(args)
+		return true, nil
 	}
 
-	r.setCommandAndArgs(command, args)
-	return true, nil
+	return true, errors.New("invalid or unsupported command in plain string: " + command)
 }
 
-func (r *RESPMessageReader) setCommandAndArgs(command string, args []string) {
+// Sets the underlying RESP command, making it uppercase. Command must be validated beforehand.
+func (r *RESPMessageReader) setCommand(command string) {
 	r.command = strings.ToUpper(command)
+}
+
+func (r *RESPMessageReader) setArgs(args []string) {
 	r.args = args
+}
+
+func (r *RESPMessageReader) setLengthLimit(limit int) {
+	r.lenLimit = limit
 }
 
 // Use when reading an actual string value. Adds 1 to the read length and
 // sets the nextBytes to -1 so a bulk string length is read on the next Read call.
-func (r *RESPMessageReader) advancePartialRespRead() {
+// Returns true when either a number of arguments larger or equal to the command arg length limit,
+// or a number of arguments equal to the bulk string arg length have been read.
+func (r *RESPMessageReader) advancePartialRespRead() bool {
 	r.lenRead += 1
 	r.nextBytes = -1
+	return r.len == r.lenRead || r.lenRead >= r.lenLimit
 }
 
 func (r *RESPMessageReader) GetCommandAndArgs() (string, []string) {
 	return r.command, r.args
-}
-
-func (r *RESPMessageReader) Write(w io.Writer) (int, error) {
-	return w.Write([]byte{0})
 }
 
 // resets the struct to its initial state. Must be called explicitly

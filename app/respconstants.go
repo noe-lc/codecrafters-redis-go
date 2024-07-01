@@ -1,5 +1,13 @@
 package main
 
+// Supported commands
+const (
+	PING = "PING"
+	ECHO = "ECHO"
+	SET  = "SET"
+	GET  = "GET"
+)
+
 // RESP protocol constants. Use for interpreted strings, and regex only if characters are not escaped
 const (
 	PROTOCOL_TERMINATOR           = "\r\n"
@@ -13,12 +21,6 @@ const (
 const (
 	PROTOCOL_TERMINATOR_RAW           = `\r\n`
 	PROTOCOL_TERMINATOR_UNESCAPED_RAW = `\\r\\n`
-)
-
-// Supported commands
-const (
-	PING string = "PING"
-	ECHO string = "ECHO"
 )
 
 // regexp strings used for command type identification
