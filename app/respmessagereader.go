@@ -7,11 +7,11 @@ import (
 )
 
 type RESPMessageReader struct {
-	command   string
-	args      []string
-	len       int
-	lenRead   int
-	lenLimit  int
+	command string
+	args    []string
+	len     int
+	lenRead int
+	// lenLimit  int
 	nextBytes int
 }
 
@@ -40,7 +40,7 @@ func (r *RESPMessageReader) Read(message string) (bool, error) {
 				return true, errors.New("invalid or unsupported resp command: " + trimmedMessage)
 			}
 			r.setCommand(trimmedMessage)
-			r.setLengthLimit(CommandExecutors[r.command].argLen)
+			// r.setLengthLimit(CommandExecutors[r.command].argLen)
 		} else {
 			nextArg := trimmedMessage[:r.nextBytes] // TODO: validate this length
 			r.setArgs(append(r.args, nextArg))
@@ -101,9 +101,9 @@ func (r *RESPMessageReader) setArgs(args []string) {
 	r.args = args
 }
 
-func (r *RESPMessageReader) setLengthLimit(limit int) {
+/* func (r *RESPMessageReader) setLengthLimit(limit int) {
 	r.lenLimit = limit
-}
+} */
 
 // Use when reading an actual string value. Adds 1 to the read length and
 // sets the nextBytes to -1 so a bulk string length is read on the next Read call.
@@ -112,7 +112,7 @@ func (r *RESPMessageReader) setLengthLimit(limit int) {
 func (r *RESPMessageReader) advancePartialRespRead() bool {
 	r.lenRead += 1
 	r.nextBytes = -1
-	return r.len == r.lenRead || r.lenRead >= r.lenLimit
+	return r.len == r.lenRead // || r.lenRead >= r.lenLimit
 }
 
 func (r *RESPMessageReader) GetCommandAndArgs() (string, []string) {
