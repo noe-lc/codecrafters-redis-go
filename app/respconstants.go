@@ -14,6 +14,7 @@ const (
 	PROTOCOL_TERMINATOR_UNESCAPED = "\\r\\n"
 	SIMPLE_STRING                 = "+"
 	BULK_STRING                   = "$"
+	NULL_BULK_STRING              = "$-1\r\n"
 	ARRAY                         = "*"
 )
 

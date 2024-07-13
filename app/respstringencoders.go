@@ -5,10 +5,6 @@ import (
 	"strings"
 )
 
-const (
-	NULL_BULK_STRING = "$-1\r\n"
-)
-
 func encodeSimpleString(s string) string {
 	return SIMPLE_STRING + s + PROTOCOL_TERMINATOR
 }

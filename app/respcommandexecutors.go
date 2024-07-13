@@ -4,40 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 )
 
-type MemoryItem struct {
-	value   string
-	created time.Time
-	expires time.Duration
-}
-
-func NewMemoryItem(value string, expires string) *MemoryItem {
-	exp, _ := time.ParseDuration(expires + "ms")
-
-	fmt.Println(exp.Milliseconds())
-	return &MemoryItem{
-		value:   value,
-		created: time.Now(),
-		expires: exp,
-	}
-}
-
-func (c *MemoryItem) getValue() (string, error) {
-	expires := c.created.Add(c.expires)
-
-	if c.expires.Milliseconds() != 0 && time.Since(expires).Milliseconds() > 0 {
-		return "", errors.New("expired key")
-	}
-
-	return c.value, nil
-}
-
 type CommandExecutor struct {
-	argLen    int
-	signature string
-	Execute   func([]string) (string, error)
+	argLen int
+	// signature string
+	Execute func([]string) (string, error)
 }
 
 func (c *CommandExecutor) GetArgLen() int {
@@ -96,7 +68,6 @@ var (
 			}
 
 			Memory[key] = *NewMemoryItem(value, expiry)
-			fmt.Printf("%#v", Memory[key])
 			return encodeSimpleString("OK"), nil
 		},
 	}
@@ -120,6 +91,21 @@ var (
 			return encodeBulkString(value), nil
 		},
 	}
+	Info = CommandExecutor{
+		argLen: 2,
+		Execute: func(args []string) (string, error) {
+			infoType := args[0]
+
+			switch infoType {
+			case "replication":
+				response := strings.Join([]string{"#Replication", "role:master"}, "\r\n")
+				return encodeBulkString(response), nil
+			default:
+				return encodeSimpleString("unsupported info type"), nil
+
+			}
+		},
+	}
 )
 
 var CommandExecutors = map[string]CommandExecutor{
@@ -127,6 +113,7 @@ var CommandExecutors = map[string]CommandExecutor{
 	"ECHO": Echo,
 	"GET":  Get,
 	"SET":  Set,
+	"INFO": Info,
 }
 
 var CommandFlags = map[string]string{
