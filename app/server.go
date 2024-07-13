@@ -10,11 +10,18 @@ import (
 	"strconv"
 )
 
-const DEFAULT_PORT = 6379
+const (
+	DEFAULT_PORT = 6379
+)
 
 func main() {
+	defaultMaster := ""
 	port := flag.Int("port", DEFAULT_PORT, "port number on which the server will run")
+	masterAddr := flag.String("replicaof", defaultMaster, "address of the master server from which to create the replica")
+
 	flag.Parse()
+
+	serverCtx := NewReplicationInfo(*masterAddr)
 	l, err := net.Listen("tcp", "0.0.0.0:"+strconv.Itoa(*port))
 
 	if err != nil {
@@ -32,11 +39,11 @@ func main() {
 			os.Exit(1)
 		}
 
-		go handleConnection(conn)
+		go handleConnection(conn, *serverCtx)
 	}
 }
 
-func handleConnection(conn net.Conn) {
+func handleConnection(conn net.Conn, replicationInfo ReplicationInfo) {
 	defer conn.Close()
 
 	fmt.Println("Client connected")
@@ -72,7 +79,7 @@ func handleConnection(conn net.Conn) {
 
 		if ready {
 			command, args := respProcessor.GetCommandAndArgs()
-			result, err := CommandExecutors[command].Execute(args)
+			result, err := CommandExecutors[command].Execute(args, replicationInfo)
 			if err != nil {
 				fmt.Println("Error executing command:", err)
 			}

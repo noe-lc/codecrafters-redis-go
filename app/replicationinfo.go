@@ -1,5 +1,9 @@
 package main
 
+import (
+	"strings"
+)
+
 type ReplicationInfo struct {
 	role string
 	// connectedSlaves            int
@@ -10,6 +14,19 @@ type ReplicationInfo struct {
 	// replBacklogSize            int
 	// replBacklogFirstByteOffset int
 	// replBacklogHistlen         any
+}
+
+func NewReplicationInfo(masterAddr string) *ReplicationInfo {
+	role := "master"
+
+	if masterAddr := strings.Split(masterAddr, " "); len(masterAddr) >= 2 {
+		// masterPort, _ := strconv.Atoi(masterAddr[1])
+		role = "slave"
+	}
+
+	return &ReplicationInfo{
+		role: role,
+	}
 }
 
 /* func getReplicationInfo() {

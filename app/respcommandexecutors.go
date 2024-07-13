@@ -9,7 +9,7 @@ import (
 type CommandExecutor struct {
 	argLen int
 	// signature string
-	Execute func([]string) (string, error)
+	Execute func([]string, ReplicationInfo) (string, error)
 }
 
 func (c *CommandExecutor) GetArgLen() int {
@@ -21,13 +21,13 @@ var Memory = map[string]MemoryItem{}
 var (
 	Ping = CommandExecutor{
 		argLen: 1,
-		Execute: func(args []string) (string, error) {
+		Execute: func(args []string, replicationInfo ReplicationInfo) (string, error) {
 			return encodeSimpleString("PONG"), nil
 		},
 	}
 	Echo = CommandExecutor{
 		argLen: 2,
-		Execute: func(args []string) (string, error) {
+		Execute: func(args []string, replicationInfo ReplicationInfo) (string, error) {
 			if len(args) == 0 {
 				return encodeBulkString(""), nil
 			}
@@ -36,7 +36,7 @@ var (
 	}
 	Set = CommandExecutor{
 		argLen: 3,
-		Execute: func(args []string) (string, error) {
+		Execute: func(args []string, replicationInfo ReplicationInfo) (string, error) {
 			if len(args) < 2 {
 				return "", errors.New("insufficient arguments")
 			}
@@ -73,7 +73,7 @@ var (
 	}
 	Get = CommandExecutor{
 		argLen: 2,
-		Execute: func(args []string) (string, error) {
+		Execute: func(args []string, replicationInfo ReplicationInfo) (string, error) {
 			memItem, exists := Memory[args[0]]
 
 			if !exists {
@@ -93,12 +93,12 @@ var (
 	}
 	Info = CommandExecutor{
 		argLen: 2,
-		Execute: func(args []string) (string, error) {
+		Execute: func(args []string, replicationInfo ReplicationInfo) (string, error) {
 			infoType := args[0]
 
 			switch infoType {
 			case "replication":
-				response := strings.Join([]string{"#Replication", "role:master"}, "\r\n")
+				response := strings.Join([]string{"#Replication", "role:" + replicationInfo.role}, "\r\n")
 				return encodeBulkString(response), nil
 			default:
 				return encodeSimpleString("unsupported info type"), nil
