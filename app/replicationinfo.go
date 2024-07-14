@@ -7,8 +7,8 @@ import (
 type ReplicationInfo struct {
 	role string
 	// connectedSlaves            int
-	// masterReplid               string
-	// masterReplOffset           int
+	masterReplid     string
+	masterReplOffset int
 	// secondReplOffset           int
 	// replBacklogActive          int
 	// replBacklogSize            int
@@ -16,17 +16,23 @@ type ReplicationInfo struct {
 	// replBacklogHistlen         any
 }
 
-func NewReplicationInfo(masterAddr string) *ReplicationInfo {
-	role := "master"
+func NewReplicationInfo(masterAddr string) ReplicationInfo {
+	replicationInfo := ReplicationInfo{
+		role: "master",
+	}
 
 	if masterAddr := strings.Split(masterAddr, " "); len(masterAddr) >= 2 {
 		// masterPort, _ := strconv.Atoi(masterAddr[1])
-		role = "slave"
+		replicationInfo.role = "slave"
 	}
 
-	return &ReplicationInfo{
-		role: role,
+	if replicationInfo.role == "master" {
+		intSlice := RandByteSliceFromRanges(40, [][]int{{48, 57} /* {65, 90}, */, {97, 122}})
+		replicationInfo.masterReplid = string(intSlice)
+		replicationInfo.masterReplOffset = 0
 	}
+
+	return replicationInfo
 }
 
 /* func getReplicationInfo() {
@@ -36,16 +42,4 @@ func NewReplicationInfo(masterAddr string) *ReplicationInfo {
 
 	return
 }
-*/
-/*
-# Replication
-role:master
-connected_slaves:0
-master_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb
-master_repl_offset:0
-second_repl_offset:-1
-repl_backlog_active:0
-repl_backlog_size:1048576
-repl_backlog_first_byte_offset:0
-repl_backlog_histlen:
 */

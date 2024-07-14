@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 )
 
@@ -98,8 +99,18 @@ var (
 
 			switch infoType {
 			case "replication":
-				response := strings.Join([]string{"#Replication", "role:" + replicationInfo.role}, "\r\n")
-				return encodeBulkString(response), nil
+				response := []string{"#Replication"}
+				valueOfReplInfo := reflect.ValueOf(replicationInfo)
+				typeOfReplInfo := reflect.TypeOf(replicationInfo)
+
+				// TODO: implement a struct serializer?
+				for i := 0; i < valueOfReplInfo.NumField(); i++ {
+					field := valueOfReplInfo.Field(i)
+					fieldName := typeOfReplInfo.Field(i).Name
+					response = append(response, fmt.Sprintf("%s:%v", CamelCaseToSnakeCase(fieldName), field))
+				}
+
+				return encodeBulkString(strings.Join(response, "\r\n")), nil
 			default:
 				return encodeSimpleString("unsupported info type"), nil
 

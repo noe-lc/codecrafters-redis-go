@@ -39,7 +39,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		go handleConnection(conn, *serverCtx)
+		go handleConnection(conn, serverCtx)
 	}
 }
 
