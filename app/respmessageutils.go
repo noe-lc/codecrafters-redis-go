@@ -64,3 +64,27 @@ func splitFullRespArrayMessage(s string, protocolTerminator string) ([]string, e
 
 	return finalMessageParts, nil
 }
+
+func ToRespSimpleString(s string) string {
+	return SIMPLE_STRING + s + PROTOCOL_TERMINATOR
+}
+
+func ToRespBulkString(s string) string {
+	return strings.Join([]string{
+		BULK_STRING,
+		strconv.Itoa(len(s)),
+		PROTOCOL_TERMINATOR,
+		s,
+		PROTOCOL_TERMINATOR,
+	}, "")
+}
+
+func ToRespArrayString(args ...string) string {
+	respArrayString := ARRAY + strconv.Itoa(len(args)) + PROTOCOL_TERMINATOR
+
+	for _, item := range args {
+		respArrayString += ToRespBulkString(item)
+	}
+
+	return respArrayString
+}

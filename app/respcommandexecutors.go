@@ -10,7 +10,7 @@ import (
 type CommandExecutor struct {
 	argLen int
 	// signature string
-	Execute func([]string, ReplicationInfo) (string, error)
+	Execute func([]string, RedisServer) (string, error)
 }
 
 func (c *CommandExecutor) GetArgLen() int {
@@ -22,22 +22,22 @@ var Memory = map[string]MemoryItem{}
 var (
 	Ping = CommandExecutor{
 		argLen: 1,
-		Execute: func(args []string, replicationInfo ReplicationInfo) (string, error) {
-			return encodeSimpleString("PONG"), nil
+		Execute: func(args []string, server RedisServer) (string, error) {
+			return ToRespSimpleString("PONG"), nil
 		},
 	}
 	Echo = CommandExecutor{
 		argLen: 2,
-		Execute: func(args []string, replicationInfo ReplicationInfo) (string, error) {
+		Execute: func(args []string, server RedisServer) (string, error) {
 			if len(args) == 0 {
-				return encodeBulkString(""), nil
+				return ToRespBulkString(""), nil
 			}
-			return encodeBulkString(args[0]), nil
+			return ToRespBulkString(args[0]), nil
 		},
 	}
 	Set = CommandExecutor{
 		argLen: 3,
-		Execute: func(args []string, replicationInfo ReplicationInfo) (string, error) {
+		Execute: func(args []string, server RedisServer) (string, error) {
 			if len(args) < 2 {
 				return "", errors.New("insufficient arguments")
 			}
@@ -69,12 +69,12 @@ var (
 			}
 
 			Memory[key] = *NewMemoryItem(value, expiry)
-			return encodeSimpleString("OK"), nil
+			return ToRespSimpleString("OK"), nil
 		},
 	}
 	Get = CommandExecutor{
 		argLen: 2,
-		Execute: func(args []string, replicationInfo ReplicationInfo) (string, error) {
+		Execute: func(args []string, server RedisServer) (string, error) {
 			memItem, exists := Memory[args[0]]
 
 			if !exists {
@@ -89,19 +89,19 @@ var (
 				return NULL_BULK_STRING, nil
 			}
 
-			return encodeBulkString(value), nil
+			return ToRespBulkString(value), nil
 		},
 	}
 	Info = CommandExecutor{
 		argLen: 2,
-		Execute: func(args []string, replicationInfo ReplicationInfo) (string, error) {
+		Execute: func(args []string, server RedisServer) (string, error) {
 			infoType := args[0]
 
 			switch infoType {
 			case "replication":
 				response := []string{"#Replication"}
-				valueOfReplInfo := reflect.ValueOf(replicationInfo)
-				typeOfReplInfo := reflect.TypeOf(replicationInfo)
+				valueOfReplInfo := reflect.ValueOf(server.replicaInfo)
+				typeOfReplInfo := reflect.TypeOf(server.replicaInfo)
 
 				// TODO: implement a struct serializer?
 				for i := 0; i < valueOfReplInfo.NumField(); i++ {
@@ -110,9 +110,9 @@ var (
 					response = append(response, fmt.Sprintf("%s:%v", CamelCaseToSnakeCase(fieldName), field))
 				}
 
-				return encodeBulkString(strings.Join(response, "\r\n")), nil
+				return ToRespBulkString(strings.Join(response, "\r\n")), nil
 			default:
-				return encodeSimpleString("unsupported info type"), nil
+				return ToRespSimpleString("unsupported info type"), nil
 
 			}
 		},

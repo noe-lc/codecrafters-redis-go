@@ -1,16 +1,19 @@
 package main
 
-import "unicode"
+import (
+	"strings"
+	"unicode"
+)
 
 func CamelCaseToSnakeCase(input string) string {
 	snakeCaseString := ""
 	for _, r := range input {
 		if unicode.IsUpper(r) {
-			snakeCaseString += "_" + string(unicode.ToLower(r))
+			snakeCaseString += "_" + string(r)
 			continue
 		}
 
 		snakeCaseString += string(r)
 	}
-	return snakeCaseString
+	return strings.ToLower(snakeCaseString)
 }

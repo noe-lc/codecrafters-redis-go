@@ -8,6 +8,12 @@ const (
 	GET  = "GET"
 )
 
+// Standard reponses
+const (
+	OK   = "OK"
+	PONG = "PONG"
+)
+
 // RESP protocol constants. Use for interpreted strings, and regex only if characters are not escaped
 const (
 	PROTOCOL_TERMINATOR           = "\r\n"

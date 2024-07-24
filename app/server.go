@@ -7,24 +7,21 @@ import (
 	"io"
 	"net"
 	"os"
-	"strconv"
-)
-
-const (
-	DEFAULT_PORT = 6379
 )
 
 func main() {
 	defaultMaster := ""
 	port := flag.Int("port", DEFAULT_PORT, "port number on which the server will run")
-	masterAddr := flag.String("replicaof", defaultMaster, "address of the master server from which to create the replica")
+	replicaOf := flag.String("replicaof", defaultMaster, "address of the master server from which to create the replica")
 
 	flag.Parse()
 
-	serverCtx := NewReplicationInfo(*masterAddr)
-	l, err := net.Listen("tcp", "0.0.0.0:"+strconv.Itoa(*port))
+	server := NewServer(*port, *replicaOf)
+	fmt.Printf("%#v \n", server)
+	l, err := server.Start()
 
 	if err != nil {
+		fmt.Println(err)
 		fmt.Println("Failed to bind to port ", *port)
 		os.Exit(1)
 	}
@@ -39,11 +36,11 @@ func main() {
 			os.Exit(1)
 		}
 
-		go handleConnection(conn, serverCtx)
+		go handleConnection(conn, server)
 	}
 }
 
-func handleConnection(conn net.Conn, replicationInfo ReplicationInfo) {
+func handleConnection(conn net.Conn, server RedisServer) {
 	defer conn.Close()
 
 	fmt.Println("Client connected")
@@ -68,6 +65,7 @@ func handleConnection(conn net.Conn, replicationInfo ReplicationInfo) {
 		//fmt.Printf("processor %#v \n", respProcessor)
 
 		if err != nil {
+			fmt.Println(err)
 			_, err = conn.Write([]byte(err.Error()))
 			if err != nil {
 				fmt.Println("Error writing:", err)
@@ -79,7 +77,7 @@ func handleConnection(conn net.Conn, replicationInfo ReplicationInfo) {
 
 		if ready {
 			command, args := respProcessor.GetCommandAndArgs()
-			result, err := CommandExecutors[command].Execute(args, replicationInfo)
+			result, err := CommandExecutors[command].Execute(args, server)
 			if err != nil {
 				fmt.Println("Error executing command:", err)
 			}
