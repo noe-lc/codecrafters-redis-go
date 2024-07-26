@@ -17,7 +17,6 @@ func main() {
 	flag.Parse()
 
 	server := NewServer(*port, *replicaOf)
-	fmt.Printf("%#v \n", server)
 	l, err := server.Start()
 
 	if err != nil {

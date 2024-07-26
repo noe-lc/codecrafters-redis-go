@@ -9,10 +9,16 @@ import (
 	"strings"
 )
 
+// Default hosts and addresses
 const (
 	DEFAULT_HOST         = "localhost"
 	DEFAULT_PORT         = 6379
 	DEFAULT_HOST_ADDRESS = "0.0.0.0"
+)
+
+const (
+	MASTER = "master"
+	SLAVE  = "slave"
 )
 
 type ReplicaInfo struct {
@@ -42,13 +48,13 @@ func NewServer(port int, replicaOf string) RedisServer {
 		masterPort: DEFAULT_PORT,
 	}
 	replicationInfo := ReplicaInfo{
-		role: "master",
+		role: MASTER,
 	}
 
 	if len(replicaOfParts) >= 2 {
 		masterPort, _ := strconv.Atoi(replicaOfParts[1])
 		server.masterPort = masterPort
-		replicationInfo.role = "slave"
+		replicationInfo.role = SLAVE
 	}
 
 	server.replicaInfo = replicationInfo
@@ -56,12 +62,24 @@ func NewServer(port int, replicaOf string) RedisServer {
 }
 
 func (s *RedisServer) Start() (net.Listener, error) {
-	if s.replicaInfo.role == "master" {
-		s.replicaInfo.masterReplid = string(RandByteSliceFromRanges(40, [][]int{{48, 57}, {97, 122}}))
-		s.replicaInfo.masterReplOffset = 0
-		return net.Listen("tcp", s.host+":"+strconv.Itoa(s.port))
+	if s.replicaInfo.role == MASTER {
+		return s.startMaster()
 	}
 
+	if s.replicaInfo.role == SLAVE {
+		return s.startSlave()
+	}
+
+	return nil, errors.New("replica role not set")
+}
+
+func (s *RedisServer) startMaster() (net.Listener, error) {
+	s.replicaInfo.masterReplid = string(RandByteSliceFromRanges(40, [][]int{{48, 57}, {97, 122}}))
+	s.replicaInfo.masterReplOffset = 0
+	return net.Listen("tcp", s.host+":"+strconv.Itoa(s.port))
+}
+
+func (s *RedisServer) startSlave() (net.Listener, error) {
 	conn, err := net.Dial("tcp", DEFAULT_HOST_ADDRESS+":"+strconv.Itoa(s.masterPort))
 
 	if err != nil {
@@ -70,8 +88,8 @@ func (s *RedisServer) Start() (net.Listener, error) {
 	}
 
 	conn.Write([]byte(ToRespArrayString(PING)))
-	okResponse := ToRespSimpleString(PONG)
-	responseBytes := make([]byte, len(okResponse))
+	pingResponse := ToRespSimpleString(PONG)
+	responseBytes := make([]byte, len(pingResponse))
 	readBytes, err := bufio.NewReader(conn).Read(responseBytes)
 	responseString := string(responseBytes[:readBytes])
 
@@ -81,9 +99,33 @@ func (s *RedisServer) Start() (net.Listener, error) {
 		return nil, errors.New("failed to read response from master server")
 	}
 
-	if responseString != okResponse {
+	if responseString != pingResponse {
 		conn.Close()
 		return nil, errors.New("unexpected response to " + PING + " from master server: " + responseString)
+	}
+
+	okResponse := ToRespSimpleString(OK)
+	replConf1 := strings.Split("REPLCONF listening-port "+strconv.Itoa(s.port), " ")
+	replConf2 := strings.Split("REPLCONF capa psync2", " ")
+	responseBytes = make([]byte, len(okResponse))
+
+	conn.Write([]byte(ToRespArrayString(replConf1...)))
+	conn.Write([]byte(ToRespArrayString(replConf2...)))
+	readBytes, err = bufio.NewReader(conn).Read(responseBytes)
+	responseString = string(responseBytes[:readBytes])
+
+	fmt.Println(responseString)
+
+	// TODO: this cheks should be run twice due to two conn.Writes
+	if err != nil {
+		conn.Close()
+		fmt.Println("Failed to read response from master server: ", err.Error())
+		return nil, errors.New("failed to read response from master server")
+	}
+
+	if responseString != okResponse {
+		conn.Close()
+		return nil, errors.New("unexpected response to " + OK + " from master server: " + responseString)
 	}
 
 	// TODO: find a way to make the replica server maintain the connection

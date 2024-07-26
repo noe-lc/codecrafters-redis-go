@@ -117,14 +117,21 @@ var (
 			}
 		},
 	}
+	ReplConf = CommandExecutor{
+		argLen: 1,
+		Execute: func(args []string, server RedisServer) (string, error) {
+			return ToRespSimpleString(OK), nil
+		},
+	}
 )
 
 var CommandExecutors = map[string]CommandExecutor{
-	"PING": Ping,
-	"ECHO": Echo,
-	"GET":  Get,
-	"SET":  Set,
-	"INFO": Info,
+	"PING":     Ping,
+	"ECHO":     Echo,
+	"GET":      Get,
+	"SET":      Set,
+	"INFO":     Info,
+	"REPLCONF": ReplConf,
 }
 
 var CommandFlags = map[string]string{
