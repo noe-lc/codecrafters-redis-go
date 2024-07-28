@@ -42,7 +42,3 @@ const (
 	// ^\*\d+\r\n$
 	PARTIAL_RESP_ARRAY = `^\` + ARRAY + `\d+` + PROTOCOL_TERMINATOR_RAW + `$`
 )
-
-func buildPsyncResponse(masterId string) string {
-	return FULLRESYNC + " " + masterId + " " + "0\r\n"
-}

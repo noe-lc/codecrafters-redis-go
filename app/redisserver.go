@@ -139,8 +139,7 @@ func (s *RedisServer) startSlave() (net.Listener, error) {
 		conn.Close()
 		return nil, err
 	}
-	fmt.Println(len(responseString), len(pSyncResponse))
-	if len(responseString) != len(pSyncResponse) {
+	if !strings.HasPrefix(responseString, SIMPLE_STRING+FULLRESYNC) {
 		conn.Close()
 		return nil, errors.New("unexpected response to " + PSYNC + " from master server: `" + responseString + "`")
 	}
