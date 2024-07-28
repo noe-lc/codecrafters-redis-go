@@ -2,16 +2,19 @@ package main
 
 // Supported commands
 const (
-	PING = "PING"
-	ECHO = "ECHO"
-	SET  = "SET"
-	GET  = "GET"
+	PING     = "PING"
+	ECHO     = "ECHO"
+	SET      = "SET"
+	GET      = "GET"
+	REPLCONF = "REPLCONF"
+	PSYNC    = "PSYNC"
 )
 
 // Standard reponses
 const (
-	OK   = "OK"
-	PONG = "PONG"
+	OK         = "OK"
+	PONG       = "PONG"
+	FULLRESYNC = "FULLRESYNC"
 )
 
 // RESP protocol constants. Use for interpreted strings, and regex only if characters are not escaped
@@ -39,3 +42,7 @@ const (
 	// ^\*\d+\r\n$
 	PARTIAL_RESP_ARRAY = `^\` + ARRAY + `\d+` + PROTOCOL_TERMINATOR_RAW + `$`
 )
+
+func buildPsyncResponse(masterId string) string {
+	return FULLRESYNC + " " + masterId + " " + "0\r\n"
+}

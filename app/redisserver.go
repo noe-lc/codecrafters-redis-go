@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"net"
@@ -16,9 +15,15 @@ const (
 	DEFAULT_HOST_ADDRESS = "0.0.0.0"
 )
 
+// Constants for server struct fields
 const (
 	MASTER = "master"
 	SLAVE  = "slave"
+)
+
+// Constants for server helpers and utils
+const (
+	REPLICA_ID_LENGTH = 40
 )
 
 type ReplicaInfo struct {
@@ -89,9 +94,7 @@ func (s *RedisServer) startSlave() (net.Listener, error) {
 
 	conn.Write([]byte(ToRespArrayString(PING)))
 	pingResponse := ToRespSimpleString(PONG)
-	responseBytes := make([]byte, len(pingResponse))
-	readBytes, err := bufio.NewReader(conn).Read(responseBytes)
-	responseString := string(responseBytes[:readBytes])
+	responseString, err := ReadStringFromConn(pingResponse, conn)
 
 	if err != nil {
 		conn.Close()
@@ -105,33 +108,53 @@ func (s *RedisServer) startSlave() (net.Listener, error) {
 	}
 
 	okResponse := ToRespSimpleString(OK)
-	replConf1 := strings.Split("REPLCONF listening-port "+strconv.Itoa(s.port), " ")
-	replConf2 := strings.Split("REPLCONF capa psync2", " ")
-	responseBytes = make([]byte, len(okResponse))
+	replConf1 := REPLCONF + " " + "listening-port" + " " + strconv.Itoa(s.port)
+	replConf2 := REPLCONF + " " + "capa" + " " + "psync2"
+	replConfList := []string{
+		replConf1, replConf2,
+	}
+	for _, replConfMessage := range replConfList {
+		messageItems := strings.Split(replConfMessage, " ")
+		conn.Write([]byte(ToRespArrayString(messageItems...)))
+		responseString, err = ReadStringFromConn(okResponse, conn)
+		// TODO: abstract out these checks as they will be run several times
+		if err != nil {
+			conn.Close()
+			return nil, err
+		}
+		if responseString != okResponse {
+			conn.Close()
+			return nil, errors.New("unexpected response to " + REPLCONF + " from master server: `" + responseString + "`")
+		}
 
-	conn.Write([]byte(ToRespArrayString(replConf1...)))
-	conn.Write([]byte(ToRespArrayString(replConf2...)))
-	readBytes, err = bufio.NewReader(conn).Read(responseBytes)
-	responseString = string(responseBytes[:readBytes])
+		fmt.Println(responseString)
+	}
 
-	fmt.Println(responseString)
-
-	// TODO: this cheks should be run twice due to two conn.Writes
+	conn.Write([]byte(ToRespArrayString(PSYNC, "?", "-1")))
+	// Slaves have no visibility of the master id in start.
+	// We pass a string of equal length to be able to read the whole response
+	pSyncResponse := ToRespSimpleString(buildPsyncResponse(strings.Repeat("*", REPLICA_ID_LENGTH)))
+	responseString, err = ReadStringFromConn(pSyncResponse, conn)
 	if err != nil {
 		conn.Close()
-		fmt.Println("Failed to read response from master server: ", err.Error())
-		return nil, errors.New("failed to read response from master server")
+		return nil, err
 	}
-
-	if responseString != okResponse {
+	if len(responseString) != len(pSyncResponse) {
 		conn.Close()
-		return nil, errors.New("unexpected response to " + OK + " from master server: " + responseString)
+		return nil, errors.New("unexpected response to " + PSYNC + " from master server: `" + responseString + "`")
 	}
 
-	// TODO: find a way to make the replica server maintain the connection
+	masterReplId := strings.Split(responseString, " ")[1]
+	fmt.Println("Successfully replicated master " + masterReplId)
+
+	// TODO: find a way to make the replica server maintain the connection and close it when needed
 	conn.Close()
 	return net.Listen("tcp", s.host+":"+strconv.Itoa(s.port))
 }
+
+/* func createIdForReplica() string {
+	return string(RandByteSliceFromRanges(40, [][]int{{48, 57}, {97, 122}}))
+} */
 
 /*
 conn, err := net.Dial("tcp", "localhost:"+ServerPort)

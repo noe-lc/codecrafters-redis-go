@@ -123,6 +123,13 @@ var (
 			return ToRespSimpleString(OK), nil
 		},
 	}
+	Psync = CommandExecutor{
+		argLen: 1,
+		Execute: func(args []string, server RedisServer) (string, error) {
+			responseMessage := buildPsyncResponse(server.replicaInfo.masterReplid)
+			return ToRespSimpleString(responseMessage), nil
+		},
+	}
 )
 
 var CommandExecutors = map[string]CommandExecutor{
@@ -132,6 +139,7 @@ var CommandExecutors = map[string]CommandExecutor{
 	"SET":      Set,
 	"INFO":     Info,
 	"REPLCONF": ReplConf,
+	"PSYNC":    Psync,
 }
 
 var CommandFlags = map[string]string{
