@@ -25,7 +25,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println("Logs from your program will appear here!")
+	fmt.Println("Sucessfully started server, will listen on port ", *port)
 
 	for {
 		conn, err := l.Accept()
@@ -76,9 +76,16 @@ func handleConnection(conn net.Conn, server RedisServer) {
 
 		if ready {
 			command, args := respProcessor.GetCommandAndArgs()
-			result, err := CommandExecutors[command].Execute(args, server)
+			result, err := CommandExecutors[command].Execute(args, server, conn)
 			if err != nil {
 				fmt.Println("Error executing command:", err)
+			}
+
+			// TODO: find a way to deal with side effects and FIX this
+			if result == "" {
+				fmt.Printf("Writing handled in %s executor\n", command)
+				respProcessor.Reset()
+				continue
 			}
 
 			_, err = conn.Write([]byte(result))

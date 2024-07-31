@@ -42,6 +42,7 @@ type RedisServer struct {
 	host        string
 	port        int
 	masterPort  int
+	listener    net.Listener
 	replicaInfo ReplicaInfo
 }
 
@@ -81,7 +82,9 @@ func (s *RedisServer) Start() (net.Listener, error) {
 func (s *RedisServer) startMaster() (net.Listener, error) {
 	s.replicaInfo.masterReplid = string(RandByteSliceFromRanges(40, [][]int{{48, 57}, {97, 122}}))
 	s.replicaInfo.masterReplOffset = 0
-	return net.Listen("tcp", s.host+":"+strconv.Itoa(s.port))
+	listener, err := net.Listen("tcp", s.host+":"+strconv.Itoa(s.port))
+	s.listener = listener
+	return listener, err
 }
 
 func (s *RedisServer) startSlave() (net.Listener, error) {
@@ -148,8 +151,10 @@ func (s *RedisServer) startSlave() (net.Listener, error) {
 	fmt.Println("Successfully replicated master " + masterReplId)
 
 	// TODO: find a way to make the replica server maintain the connection and close it when needed
-	conn.Close()
-	return net.Listen("tcp", s.host+":"+strconv.Itoa(s.port))
+	// conn.Close()
+	listener, err := net.Listen("tcp", s.host+":"+strconv.Itoa(s.port))
+	s.listener = listener
+	return listener, err
 }
 
 /* func createIdForReplica() string {

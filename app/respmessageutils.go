@@ -90,5 +90,5 @@ func ToRespArrayString(args ...string) string {
 }
 
 func buildPsyncResponse(masterId string) string {
-	return FULLRESYNC + " " + masterId + " " + "0" + PROTOCOL_TERMINATOR
+	return SIMPLE_STRING + FULLRESYNC + " " + masterId + " " + "0" + PROTOCOL_TERMINATOR
 }
