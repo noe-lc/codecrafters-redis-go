@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net"
+	"os"
 	"strconv"
 )
 
@@ -29,12 +30,26 @@ func NewMasterServer(port int) RedisMasterServer {
 	return server
 }
 
-func (r *RedisMasterServer) Start() (net.Listener, error) {
-	r.replicaInfo.masterReplid = string(RandByteSliceFromRanges(40, [][]int{{48, 57}, {97, 122}}))
+func (r *RedisMasterServer) Start() error {
+	port := strconv.Itoa(r.Port)
 	r.replicaInfo.masterReplOffset = 0
-	listener, err := net.Listen("tcp", r.Host+":"+strconv.Itoa(r.Port))
+	r.replicaInfo.masterReplid = string(RandByteSliceFromRanges(40, [][]int{{48, 57}, {97, 122}}))
+	listener, err := net.Listen("tcp", r.Host+":"+port)
+	if err != nil {
+		return err
+	}
 	r.listener = listener
-	return listener, err
+
+	fmt.Println("Master server listening on port", port)
+
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			fmt.Println("Error accepting connection: ", err.Error())
+			os.Exit(1)
+		}
+		go HandleConnection(conn, r)
+	}
 }
 
 func (r RedisMasterServer) ReplicaInfo() ReplicaInfo {
@@ -57,6 +72,7 @@ func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn) err
 	// 2. handle side effects internally
 	switch command {
 	case PSYNC:
+		r.replicaConnections = append(r.replicaConnections, conn)
 		rdbFileBytes, err := hex.DecodeString(RDB_EMPTY_FILE_HEX)
 		if err != nil {
 			// conn.Write([]byte("error decoding empty RDB file"))
@@ -70,7 +86,6 @@ func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn) err
 		if err != nil {
 			return err
 		}
-		r.replicaConnections = append(r.replicaConnections, conn)
 	case REPLCONF:
 		break
 		/* indexOfPortArg := slices.Index(args, LISTENING_PORT_ARG)

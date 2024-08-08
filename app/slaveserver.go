@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -43,32 +44,34 @@ func NewSlaveServer(port int, replicaOf string) (RedisSlaveServer, error) {
 	return server, nil
 }
 
-func (r *RedisSlaveServer) Start() (net.Listener, error) {
-	listener, err := net.Listen("tcp", r.Host+":"+strconv.Itoa(r.Port))
+func (r *RedisSlaveServer) Start() error {
+	port := strconv.Itoa(r.Port)
+	listener, err := net.Listen("tcp", r.Host+":"+port)
 	if err != nil {
-		return nil, err
+		return err
 	}
+	r.listener = listener
+	fmt.Println("Slave server listening on port", port)
+
+	go r.acceptConnections()
+
 	conn, err := net.Dial("tcp", DEFAULT_HOST_ADDRESS+":"+strconv.Itoa(r.MasterPort))
 	if err != nil {
 		fmt.Println("Error connecting to master server")
-		return nil, err
+		return err
 	}
-
 	conn.Write([]byte(ToRespArrayString(PING)))
-
-	r.listener = listener
 	r.connection = conn
-
 	pingResponse := ToRespSimpleString(PONG)
 	responseString, err := ReadStringFromConn(pingResponse, conn)
 	if err != nil {
 		conn.Close()
 		fmt.Println("Failed to read response from master server: ", err.Error())
-		return nil, errors.New("failed to read response from master server")
+		return errors.New("failed to read response from master server")
 	}
 	if responseString != pingResponse {
 		conn.Close()
-		return nil, errors.New("unexpected response to " + PING + " from master server: " + responseString)
+		return errors.New("unexpected response to " + PING + " from master server: " + responseString)
 	}
 
 	okResponse := ToRespSimpleString(OK)
@@ -85,11 +88,11 @@ func (r *RedisSlaveServer) Start() (net.Listener, error) {
 		// TODO: abstract out these checks as they will be run several times
 		if err != nil {
 			conn.Close()
-			return nil, err
+			return err
 		}
 		if responseString != okResponse {
 			conn.Close()
-			return nil, errors.New("unexpected response to " + REPLCONF + " from master server: `" + responseString + "`")
+			return errors.New("unexpected response to " + REPLCONF + " from master server: `" + responseString + "`")
 		}
 
 		fmt.Println(responseString)
@@ -101,17 +104,17 @@ func (r *RedisSlaveServer) Start() (net.Listener, error) {
 	responseString, err = ReadStringFromConn(pSyncResponse, conn)
 	if err != nil {
 		conn.Close()
-		return nil, err
+		return err
 	}
 	if !strings.HasPrefix(responseString, SIMPLE_STRING+FULLRESYNC) {
 		conn.Close()
-		return nil, errors.New("unexpected response to " + PSYNC + " from master server: `" + responseString + "`")
+		return errors.New("unexpected response to " + PSYNC + " from master server: `" + responseString + "`")
 	}
 
 	// conn.Close()
 	masterReplId := strings.Split(responseString, " ")[1]
 	fmt.Println("Successfully replicated master " + masterReplId)
-	return listener, nil
+	return nil
 }
 
 func (r *RedisSlaveServer) Stop() error {
@@ -133,4 +136,15 @@ func (r RedisSlaveServer) RunCommand(cmp CommandComponents, conn net.Conn) error
 	}
 
 	return nil
+}
+
+func (r *RedisSlaveServer) acceptConnections() {
+	for {
+		conn, err := r.listener.Accept()
+		if err != nil {
+			fmt.Println("Error accepting connection: ", err.Error())
+			os.Exit(1)
+		}
+		go HandleConnection(conn, r)
+	}
 }

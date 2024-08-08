@@ -33,7 +33,7 @@ type ReplicaInfo struct {
 }
 
 type RedisServer interface {
-	Start() (net.Listener, error)
+	Start() error
 	ReplicaInfo() ReplicaInfo
 	RunCommand(cmp CommandComponents, conn net.Conn) error
 }
