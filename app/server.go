@@ -16,12 +16,14 @@ func main() {
 
 	flag.Parse()
 
-	server := NewServer(*port, *replicaOf)
+	server, err := CreateRedisServer(*port, *replicaOf)
+	if err != nil {
+		fmt.Println("Faile to create server: ", err)
+		os.Exit(1)
+	}
 	l, err := server.Start()
-
 	if err != nil {
 		fmt.Println(err)
-		fmt.Println("Failed to bind to port ", *port)
 		os.Exit(1)
 	}
 
@@ -35,14 +37,14 @@ func main() {
 			os.Exit(1)
 		}
 
-		go handleConnection(conn, server)
+		go HandleConnection(conn, server)
 	}
 }
 
-func handleConnection(conn net.Conn, server RedisServer) {
+func HandleConnection(conn net.Conn, server RedisServer) {
 	defer conn.Close()
 
-	fmt.Println("Client connected")
+	fmt.Println("Client connected: ", conn.RemoteAddr())
 
 	respProcessor := NewRESPMessageReader()
 	reader := bufio.NewReader(conn)
@@ -75,24 +77,11 @@ func handleConnection(conn net.Conn, server RedisServer) {
 		}
 
 		if ready {
-			command, args := respProcessor.GetCommandAndArgs()
-			result, err := CommandExecutors[command].Execute(args, server, conn)
+			commandComponents := respProcessor.GetCommandComponents()
+			err := server.RunCommand(commandComponents, conn)
 			if err != nil {
-				fmt.Println("Error executing command:", err)
+				fmt.Printf("Error executing command %s in %s. Error: %s", commandComponents.Command, server.ReplicaInfo().role, err.Error())
 			}
-
-			// TODO: find a way to deal with side effects and FIX this
-			if result == "" {
-				fmt.Printf("Writing handled in %s executor\n", command)
-				respProcessor.Reset()
-				continue
-			}
-
-			_, err = conn.Write([]byte(result))
-			if err != nil {
-				fmt.Println("Error writing:", err)
-			}
-
 			respProcessor.Reset()
 		}
 	}

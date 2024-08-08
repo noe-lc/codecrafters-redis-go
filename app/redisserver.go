@@ -1,12 +1,6 @@
 package main
 
-import (
-	"errors"
-	"fmt"
-	"net"
-	"strconv"
-	"strings"
-)
+import "net"
 
 // Default hosts and addresses
 const (
@@ -38,169 +32,22 @@ type ReplicaInfo struct {
 	// replBacklogHistlen         any
 }
 
-type RedisServer struct {
-	host        string
-	port        int
-	masterPort  int
-	listener    net.Listener
-	replicaInfo ReplicaInfo
+type RedisServer interface {
+	Start() (net.Listener, error)
+	ReplicaInfo() ReplicaInfo
+	RunCommand(cmp CommandComponents, conn net.Conn) error
 }
 
-func NewServer(port int, replicaOf string) RedisServer {
-	replicaOfParts := strings.Split(replicaOf, " ")
-	server := RedisServer{
-		host:       DEFAULT_HOST,
-		port:       port,
-		masterPort: DEFAULT_PORT,
-	}
-	replicationInfo := ReplicaInfo{
-		role: MASTER,
-	}
-
-	if len(replicaOfParts) >= 2 {
-		masterPort, _ := strconv.Atoi(replicaOfParts[1])
-		server.masterPort = masterPort
-		replicationInfo.role = SLAVE
-	}
-
-	server.replicaInfo = replicationInfo
-	return server
-}
-
-func (s *RedisServer) Start() (net.Listener, error) {
-	if s.replicaInfo.role == MASTER {
-		return s.startMaster()
-	}
-
-	if s.replicaInfo.role == SLAVE {
-		return s.startSlave()
-	}
-
-	return nil, errors.New("replica role not set")
-}
-
-func (s *RedisServer) startMaster() (net.Listener, error) {
-	s.replicaInfo.masterReplid = string(RandByteSliceFromRanges(40, [][]int{{48, 57}, {97, 122}}))
-	s.replicaInfo.masterReplOffset = 0
-	listener, err := net.Listen("tcp", s.host+":"+strconv.Itoa(s.port))
-	s.listener = listener
-	return listener, err
-}
-
-func (s *RedisServer) startSlave() (net.Listener, error) {
-	conn, err := net.Dial("tcp", DEFAULT_HOST_ADDRESS+":"+strconv.Itoa(s.masterPort))
-
-	if err != nil {
-		fmt.Println("Error connecting to master server: ", err.Error())
-		return nil, errors.New("error connecting to master server")
-	}
-
-	conn.Write([]byte(ToRespArrayString(PING)))
-	pingResponse := ToRespSimpleString(PONG)
-	responseString, err := ReadStringFromConn(pingResponse, conn)
-
-	if err != nil {
-		conn.Close()
-		fmt.Println("Failed to read response from master server: ", err.Error())
-		return nil, errors.New("failed to read response from master server")
-	}
-
-	if responseString != pingResponse {
-		conn.Close()
-		return nil, errors.New("unexpected response to " + PING + " from master server: " + responseString)
-	}
-
-	okResponse := ToRespSimpleString(OK)
-	replConf1 := REPLCONF + " " + "listening-port" + " " + strconv.Itoa(s.port)
-	replConf2 := REPLCONF + " " + "capa" + " " + "psync2"
-	replConfList := []string{
-		replConf1, replConf2,
-	}
-	for _, replConfMessage := range replConfList {
-		messageItems := strings.Split(replConfMessage, " ")
-		conn.Write([]byte(ToRespArrayString(messageItems...)))
-		responseString, err = ReadStringFromConn(okResponse, conn)
-		// TODO: abstract out these checks as they will be run several times
+func CreateRedisServer(port int, replicaOf string) (RedisServer, error) {
+	if replicaOf != "" {
+		server, err := NewSlaveServer(port, replicaOf)
 		if err != nil {
-			conn.Close()
 			return nil, err
 		}
-		if responseString != okResponse {
-			conn.Close()
-			return nil, errors.New("unexpected response to " + REPLCONF + " from master server: `" + responseString + "`")
-		}
-
-		fmt.Println(responseString)
+		return &server, nil
 	}
 
-	conn.Write([]byte(ToRespArrayString(PSYNC, "?", "-1")))
-	// Slaves have no visibility of the master id in start.
-	// We pass a string of equal length to be able to read the whole response
-	pSyncResponse := ToRespSimpleString(buildPsyncResponse(strings.Repeat("*", REPLICA_ID_LENGTH)))
-	responseString, err = ReadStringFromConn(pSyncResponse, conn)
-	if err != nil {
-		conn.Close()
-		return nil, err
-	}
-	if !strings.HasPrefix(responseString, SIMPLE_STRING+FULLRESYNC) {
-		conn.Close()
-		return nil, errors.New("unexpected response to " + PSYNC + " from master server: `" + responseString + "`")
-	}
+	server := NewMasterServer(port)
 
-	masterReplId := strings.Split(responseString, " ")[1]
-	fmt.Println("Successfully replicated master " + masterReplId)
-
-	// TODO: find a way to make the replica server maintain the connection and close it when needed
-	// conn.Close()
-	listener, err := net.Listen("tcp", s.host+":"+strconv.Itoa(s.port))
-	s.listener = listener
-	return listener, err
+	return &server, nil
 }
-
-/* func createIdForReplica() string {
-	return string(RandByteSliceFromRanges(40, [][]int{{48, 57}, {97, 122}}))
-} */
-
-/*
-conn, err := net.Dial("tcp", "localhost:"+ServerPort)
-
-	if err != nil {
-		fmt.Println("Error connecting to server")
-	}
-
-	defer conn.Close()
-
-	reader := bufio.NewReader(os.Stdin)
-
-	for {
-		fmt.Println("Enter a message:")
-		message, _ := reader.ReadString('\n')
-		_, err := conn.Write([]byte(message))
-
-		if err != nil {
-			fmt.Println("Error writing to server:", err)
-			return
-		}
-
-		responseBytes := make([]byte, 1024)
-		readBytes, err := bufio.NewReader(conn).Read(responseBytes)
-
-		if err != nil {
-			fmt.Println("Error reading from server", err)
-			return
-		}
-
-		os.Stdout.Write(responseBytes[:readBytes])
-		os.Stdout.Write([]byte{'\n'})
-	}
-
-*/
-
-/* func getReplicationInfo() {
-	repInfo := ReplicaInfo{
-		role: "master",
-	}
-
-	return
-}
-*/

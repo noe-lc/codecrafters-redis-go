@@ -1,18 +1,33 @@
 package main
 
 import (
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
 	"reflect"
-	"strconv"
 	"strings"
+)
+
+// Supported commands
+const (
+	PING     = "PING"
+	ECHO     = "ECHO"
+	SET      = "SET"
+	GET      = "GET"
+	REPLCONF = "REPLCONF"
+	PSYNC    = "PSYNC"
+)
+
+// Command types
+const (
+	READ  = "READ"
+	WRITE = "WRITE"
 )
 
 type CommandExecutor struct {
 	argLen int
 	// signature string
+	Type    string
 	Execute func([]string, RedisServer, net.Conn) (string, error)
 }
 
@@ -22,6 +37,7 @@ func (c *CommandExecutor) GetArgLen() int {
 
 var Memory = map[string]MemoryItem{}
 
+// ! Command executors do not use connections... for now
 var (
 	Ping = CommandExecutor{
 		argLen: 1,
@@ -40,6 +56,7 @@ var (
 	}
 	Set = CommandExecutor{
 		argLen: 3,
+		Type:   WRITE,
 		Execute: func(args []string, server RedisServer, conn net.Conn) (string, error) {
 			if len(args) < 2 {
 				return "", errors.New("insufficient arguments")
@@ -103,8 +120,9 @@ var (
 			switch infoType {
 			case "replication":
 				response := []string{"#Replication"}
-				valueOfReplInfo := reflect.ValueOf(server.replicaInfo)
-				typeOfReplInfo := reflect.TypeOf(server.replicaInfo)
+				replicaInfo := server.ReplicaInfo()
+				valueOfReplInfo := reflect.ValueOf(replicaInfo)
+				typeOfReplInfo := reflect.TypeOf(replicaInfo)
 
 				// TODO: implement a struct serializer?
 				for i := 0; i < valueOfReplInfo.NumField(); i++ {
@@ -115,7 +133,7 @@ var (
 
 				return ToRespBulkString(strings.Join(response, "\r\n")), nil
 			default:
-				return ToRespSimpleString("unsupported info type"), nil
+				return ToRespSimpleString("unsupported INFO type"), nil
 
 			}
 		},
@@ -129,28 +147,7 @@ var (
 	Psync = CommandExecutor{
 		argLen: 1,
 		Execute: func(args []string, server RedisServer, conn net.Conn) (string, error) {
-			responseMessage := buildPsyncResponse(server.replicaInfo.masterReplid)
-			_, err := conn.Write([]byte(responseMessage))
-			if err != nil {
-				fmt.Println("Error writing:", err)
-				return "", err
-			}
-			rdbFileBytes, err := hex.DecodeString(RDB_EMPTY_FILE_HEX)
-			if err != nil {
-				fmt.Println(err)
-				conn.Write([]byte("error decoding empty RDB file"))
-			}
-			_, err = conn.Write([]byte(BULK_STRING + strconv.Itoa(len(rdbFileBytes)) + PROTOCOL_TERMINATOR))
-			if err != nil {
-				fmt.Println("Error writing:", err)
-				return "", err
-			}
-			_, err = conn.Write(rdbFileBytes)
-			if err != nil {
-				fmt.Println("Error writing:", err)
-				return "", err
-			}
-			return "", nil
+			return buildPsyncResponse(server.ReplicaInfo().masterReplid), nil
 		},
 	}
 )

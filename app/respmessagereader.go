@@ -7,12 +7,22 @@ import (
 )
 
 type RESPMessageReader struct {
-	command string
-	args    []string
-	len     int
-	lenRead int
+	rawInput string
+	command  string
+	args     []string
+	len      int
+	lenRead  int
 	// lenLimit  int
 	nextBytes int
+}
+
+type CommandComponents struct {
+	// the full raw string from which command and args is derived
+	Input string
+	// the RESP command
+	Command string
+	// the RESP command arguments
+	Args []string
 }
 
 func NewRESPMessageReader() RESPMessageReader {
@@ -24,6 +34,8 @@ func (r *RESPMessageReader) Read(message string) (bool, error) {
 
 	// handling partial resp array
 	if r.len != 0 {
+		r.rawInput += message
+
 		// reads bulk string length
 		if r.nextBytes == -1 {
 			stringLen := getRespMessageLen(trimmedMessage, BULK_STRING)
@@ -54,7 +66,6 @@ func (r *RESPMessageReader) Read(message string) (bool, error) {
 		return false, nil
 	}
 
-	// full resp array
 	isFullRespArray, _ := regexp.MatchString(FULL_RESP_ARRAY, message)
 	isFullRespArrayUnescaped, _ := regexp.MatchString(FULL_RESP_ARRAY_UNESCAPED, message)
 	isPartialRespArray, _ := regexp.MatchString(PARTIAL_RESP_ARRAY, message)
@@ -71,12 +82,14 @@ func (r *RESPMessageReader) Read(message string) (bool, error) {
 
 		r.setCommand(messageParts[0])
 		r.setArgs(messageParts[1:])
+		r.rawInput = message
 		return true, nil
 	}
 
 	if isPartialRespArray {
 		arrayLen := getRespMessageLen(trimmedMessage, ARRAY)
 		r.len = arrayLen
+		r.rawInput = message
 		return false, nil
 	}
 
@@ -86,6 +99,7 @@ func (r *RESPMessageReader) Read(message string) (bool, error) {
 	if IsRESPCommandSupported(command) {
 		r.setCommand(command)
 		r.setArgs(args)
+		r.rawInput = message
 		return true, nil
 	}
 
@@ -115,8 +129,12 @@ func (r *RESPMessageReader) advancePartialRespRead() bool {
 	return r.len == r.lenRead // || r.lenRead >= r.lenLimit
 }
 
-func (r *RESPMessageReader) GetCommandAndArgs() (string, []string) {
-	return r.command, r.args
+func (r *RESPMessageReader) GetCommandComponents() CommandComponents {
+	return CommandComponents{
+		Input:   r.rawInput,
+		Command: r.command,
+		Args:    r.args,
+	}
 }
 
 // resets the struct to its initial state. Must be called explicitly

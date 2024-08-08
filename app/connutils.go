@@ -2,8 +2,6 @@ package main
 
 import (
 	"bufio"
-	"errors"
-	"fmt"
 	"net"
 )
 
@@ -12,9 +10,7 @@ func ReadStringFromConn(readStr string, c net.Conn) (string, error) {
 	readBytes, err := bufio.NewReader(c).Read(responseBytes)
 
 	if err != nil {
-		errMsg := fmt.Sprintf("error attempting to read %s from connection", readStr)
-		fmt.Println(errMsg + ": " + err.Error())
-		return "", errors.New(errMsg)
+		return "", err
 	}
 
 	return string(responseBytes[:readBytes]), nil
