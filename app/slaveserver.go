@@ -108,7 +108,7 @@ func (r *RedisSlaveServer) Start() (net.Listener, error) {
 		return nil, errors.New("unexpected response to " + PSYNC + " from master server: `" + responseString + "`")
 	}
 
-	conn.Close()
+	// conn.Close()
 	masterReplId := strings.Split(responseString, " ")[1]
 	fmt.Println("Successfully replicated master " + masterReplId)
 	return listener, nil

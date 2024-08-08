@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net"
-	"slices"
 	"strconv"
 )
 
@@ -71,9 +70,10 @@ func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn) err
 		if err != nil {
 			return err
 		}
+		r.replicaConnections = append(r.replicaConnections, conn)
 	case REPLCONF:
-		fmt.Println(conn.RemoteAddr().Network(), conn.RemoteAddr().String())
-		indexOfPortArg := slices.Index(args, LISTENING_PORT_ARG)
+		break
+		/* indexOfPortArg := slices.Index(args, LISTENING_PORT_ARG)
 		indexOfPort := indexOfPortArg + 1
 		if indexOfPortArg == -1 || len(args) <= indexOfPort {
 			break
@@ -85,7 +85,7 @@ func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn) err
 			return err
 		}
 		r.replicaConnections = append(r.replicaConnections, conn)
-		fmt.Printf("connections *: %#v\n", r.replicaConnections)
+		fmt.Printf("connections *: %#v\n", r.replicaConnections) */
 	default:
 		if executor.Type == WRITE {
 			r.propagateCommand(commandInput)
