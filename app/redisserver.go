@@ -6,7 +6,7 @@ import "net"
 const (
 	DEFAULT_HOST         = "localhost"
 	DEFAULT_PORT         = 6379
-	DEFAULT_HOST_ADDRESS = "127.0.0.1"
+	DEFAULT_HOST_ADDRESS = "0.0.0.0"
 )
 
 // Constants for server struct fields

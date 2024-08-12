@@ -15,10 +15,11 @@ func main() {
 
 	server, err := CreateRedisServer(*port, *replicaOf)
 	if err != nil {
-		fmt.Println("Faile to create server: ", err)
+		fmt.Println("Failed to create server: ", err)
 		os.Exit(1)
 	}
 	err = server.Start()
+	// TODO: maybe use a channel, but there should be cleaner ways to achieve this
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)

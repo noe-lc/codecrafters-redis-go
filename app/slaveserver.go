@@ -51,8 +51,10 @@ func (r *RedisSlaveServer) Start() error {
 		return err
 	}
 	r.listener = listener
+
 	fmt.Println("Slave server listening on port", port)
 
+	connChannel := make(chan bool)
 	go r.acceptConnections()
 
 	conn, err := net.Dial("tcp", DEFAULT_HOST_ADDRESS+":"+strconv.Itoa(r.MasterPort))
@@ -62,6 +64,7 @@ func (r *RedisSlaveServer) Start() error {
 	}
 	conn.Write([]byte(ToRespArrayString(PING)))
 	r.connection = conn
+
 	pingResponse := ToRespSimpleString(PONG)
 	responseString, err := ReadStringFromConn(pingResponse, conn)
 	if err != nil {
@@ -114,6 +117,7 @@ func (r *RedisSlaveServer) Start() error {
 	// conn.Close()
 	masterReplId := strings.Split(responseString, " ")[1]
 	fmt.Println("Successfully replicated master " + masterReplId)
+	<-connChannel
 	return nil
 }
 
