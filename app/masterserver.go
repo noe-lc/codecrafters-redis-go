@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"slices"
 	"strconv"
 )
 
@@ -72,7 +73,7 @@ func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn) err
 	// 2. handle side effects internally
 	switch command {
 	case PSYNC:
-		r.replicaConnections = append(r.replicaConnections, conn)
+		// r.replicaConnections = append(r.replicaConnections, conn)
 		rdbFileBytes, err := hex.DecodeString(RDB_EMPTY_FILE_HEX)
 		if err != nil {
 			// conn.Write([]byte("error decoding empty RDB file"))
@@ -87,8 +88,8 @@ func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn) err
 			return err
 		}
 	case REPLCONF:
-		break
-		/* indexOfPortArg := slices.Index(args, LISTENING_PORT_ARG)
+		// break
+		indexOfPortArg := slices.Index(args, LISTENING_PORT_ARG)
 		indexOfPort := indexOfPortArg + 1
 		if indexOfPortArg == -1 || len(args) <= indexOfPort {
 			break
@@ -100,7 +101,6 @@ func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn) err
 			return err
 		}
 		r.replicaConnections = append(r.replicaConnections, conn)
-		fmt.Printf("connections *: %#v\n", r.replicaConnections) */
 	default:
 		if executor.Type == WRITE {
 			r.propagateCommand(commandInput)
