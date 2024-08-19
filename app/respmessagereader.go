@@ -30,7 +30,7 @@ func NewRESPMessageReader() RESPMessageReader {
 }
 
 func (r *RESPMessageReader) Read(message string) (bool, error) {
-	trimmedMessage := strings.TrimRight(message, "\r\n")
+	trimmedMessage := strings.TrimRight(message, PROTOCOL_TERMINATOR)
 
 	// handling partial resp array
 	if r.len != 0 {

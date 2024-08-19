@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"slices"
 	"strconv"
 )
 
@@ -73,34 +72,36 @@ func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn) err
 	// 2. handle side effects internally
 	switch command {
 	case PSYNC:
-		// r.replicaConnections = append(r.replicaConnections, conn)
 		rdbFileBytes, err := hex.DecodeString(RDB_EMPTY_FILE_HEX)
 		if err != nil {
-			// conn.Write([]byte("error decoding empty RDB file"))
 			return err
 		}
-		_, err = conn.Write([]byte(BULK_STRING + strconv.Itoa(len(rdbFileBytes)) + PROTOCOL_TERMINATOR))
+		rdbFileLength := BULK_STRING + strconv.Itoa(len(rdbFileBytes)) + PROTOCOL_TERMINATOR
+		_, err = conn.Write([]byte(rdbFileLength))
 		if err != nil {
 			return err
 		}
 		_, err = conn.Write(rdbFileBytes)
+		//fmt.Println("wrote", wrote)
 		if err != nil {
 			return err
 		}
+
+		r.replicaConnections = append(r.replicaConnections, conn)
 	case REPLCONF:
-		// break
-		indexOfPortArg := slices.Index(args, LISTENING_PORT_ARG)
+		break
+		/* indexOfPortArg := slices.Index(args, LISTENING_PORT_ARG)
 		indexOfPort := indexOfPortArg + 1
 		if indexOfPortArg == -1 || len(args) <= indexOfPort {
 			break
 		}
-		port := args[indexOfPort]
-		conn, err := net.Dial("tcp", DEFAULT_HOST_ADDRESS+":"+port)
+		replicaPort := args[indexOfPort]
+		conn, err := net.Dial("tcp", DEFAULT_HOST_ADDRESS+":"+replicaPort)
 		if err != nil {
-			fmt.Printf("Could not connect to replica on port %s\n", port)
+			fmt.Printf("Could not connect to replica on port %s\n", replicaPort)
 			return err
 		}
-		r.replicaConnections = append(r.replicaConnections, conn)
+		r.replicaConnections = append(r.replicaConnections, conn) */
 	default:
 		if executor.Type == WRITE {
 			r.propagateCommand(commandInput)

@@ -59,6 +59,7 @@ var (
 		Type:   WRITE,
 		Execute: func(args []string, server RedisServer, conn net.Conn) (string, error) {
 			if len(args) < 2 {
+				fmt.Println("args", args)
 				return "", errors.New("insufficient arguments")
 			}
 

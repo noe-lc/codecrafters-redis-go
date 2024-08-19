@@ -1,6 +1,8 @@
 package main
 
-import "net"
+import (
+	"net"
+)
 
 // Default hosts and addresses
 const (
@@ -48,6 +50,5 @@ func CreateRedisServer(port int, replicaOf string) (RedisServer, error) {
 	}
 
 	server := NewMasterServer(port)
-
 	return &server, nil
 }

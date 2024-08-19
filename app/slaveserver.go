@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"net"
@@ -10,13 +11,14 @@ import (
 )
 
 type RedisSlaveServer struct {
-	Role        string
-	Host        string
-	Port        int
-	MasterPort  int
-	listener    net.Listener
-	connection  net.Conn
-	replicaInfo ReplicaInfo
+	Role             string
+	Host             string
+	Port             int
+	MasterPort       int
+	listener         net.Listener
+	masterConnection net.Conn
+	replicaInfo      ReplicaInfo
+	rdbFile          []byte
 }
 
 func NewSlaveServer(port int, replicaOf string) (RedisSlaveServer, error) {
@@ -48,76 +50,28 @@ func (r *RedisSlaveServer) Start() error {
 	port := strconv.Itoa(r.Port)
 	listener, err := net.Listen("tcp", r.Host+":"+port)
 	if err != nil {
+		fmt.Println("Error connecting to master server")
 		return err
 	}
 	r.listener = listener
 
-	fmt.Println("Slave server listening on port", port)
-
-	connChannel := make(chan bool)
-	go r.acceptConnections()
-
-	conn, err := net.Dial("tcp", DEFAULT_HOST_ADDRESS+":"+strconv.Itoa(r.MasterPort))
+	slaveServerChannel := make(chan bool)
+	masterAddress := DEFAULT_HOST_ADDRESS + ":" + strconv.Itoa(r.MasterPort)
+	conn, err := net.Dial("tcp", masterAddress)
 	if err != nil {
 		fmt.Println("Error connecting to master server")
 		return err
 	}
-	conn.Write([]byte(ToRespArrayString(PING)))
-	r.connection = conn
-
-	pingResponse := ToRespSimpleString(PONG)
-	responseString, err := ReadStringFromConn(pingResponse, conn)
+	r.masterConnection = conn
+	err = r.handshakeWithMaster()
 	if err != nil {
-		conn.Close()
-		fmt.Println("Failed to read response from master server: ", err.Error())
-		return errors.New("failed to read response from master server")
-	}
-	if responseString != pingResponse {
-		conn.Close()
-		return errors.New("unexpected response to " + PING + " from master server: " + responseString)
-	}
-
-	okResponse := ToRespSimpleString(OK)
-	replConf1 := REPLCONF + " " + "listening-port" + " " + strconv.Itoa(r.Port)
-	replConf2 := REPLCONF + " " + "capa" + " " + "psync2"
-	replConfList := []string{
-		replConf1, replConf2,
-	}
-
-	for _, replConfMessage := range replConfList {
-		messageItems := strings.Split(replConfMessage, " ")
-		conn.Write([]byte(ToRespArrayString(messageItems...)))
-		responseString, err = ReadStringFromConn(okResponse, conn)
-		// TODO: abstract out these checks as they will be run several times
-		if err != nil {
-			conn.Close()
-			return err
-		}
-		if responseString != okResponse {
-			conn.Close()
-			return errors.New("unexpected response to " + REPLCONF + " from master server: `" + responseString + "`")
-		}
-
-		fmt.Println(responseString)
-	}
-
-	conn.Write([]byte(ToRespArrayString(PSYNC, "?", "-1")))
-	// We pass a string of equal length to be able to read the whole response. Slaves have no visibility of the master id in start.
-	pSyncResponse := ToRespSimpleString(buildPsyncResponse(strings.Repeat("*", REPLICA_ID_LENGTH)))
-	responseString, err = ReadStringFromConn(pSyncResponse, conn)
-	if err != nil {
-		conn.Close()
+		fmt.Println("Failed to execute handshake with master")
 		return err
 	}
-	if !strings.HasPrefix(responseString, SIMPLE_STRING+FULLRESYNC) {
-		conn.Close()
-		return errors.New("unexpected response to " + PSYNC + " from master server: `" + responseString + "`")
-	}
+	go r.acceptConnections(r.listener)
+	go HandleConnection(r.masterConnection, r)
 
-	// conn.Close()
-	masterReplId := strings.Split(responseString, " ")[1]
-	fmt.Println("Successfully replicated master " + masterReplId)
-	<-connChannel
+	<-slaveServerChannel // ! this prevents the caller to return
 	return nil
 }
 
@@ -134,6 +88,11 @@ func (r RedisSlaveServer) RunCommand(cmp CommandComponents, conn net.Conn) error
 	if err != nil {
 		return err
 	}
+
+	if r.masterConnection.RemoteAddr().String() == conn.RemoteAddr().String() {
+		return nil
+	}
+
 	_, err = conn.Write([]byte(result))
 	if err != nil {
 		return err
@@ -142,13 +101,95 @@ func (r RedisSlaveServer) RunCommand(cmp CommandComponents, conn net.Conn) error
 	return nil
 }
 
-func (r *RedisSlaveServer) acceptConnections() {
+func (r *RedisSlaveServer) acceptConnections(l net.Listener) {
+	fmt.Println("Slave server listening on port", r.Port)
 	for {
-		conn, err := r.listener.Accept()
+		conn, err := l.Accept()
 		if err != nil {
 			fmt.Println("Error accepting connection: ", err.Error())
 			os.Exit(1)
 		}
 		go HandleConnection(conn, r)
 	}
+}
+
+func (r *RedisSlaveServer) handshakeWithMaster() error {
+	// * 1 - PING
+	_, err := r.masterConnection.Write([]byte(ToRespArrayString(PING)))
+	if err != nil {
+		return err
+	}
+
+	reader := bufio.NewReader(r.masterConnection)
+	pingResponseExpected := ToRespSimpleString(PONG)
+	pingResponse, err := BufioRead(reader, pingResponseExpected)
+	if err != nil {
+		r.masterConnection.Close()
+		fmt.Println("Failed to read response from master server")
+		return err
+	}
+	if pingResponse != pingResponseExpected {
+		r.masterConnection.Close()
+		return fmt.Errorf("unexpected response to %s from master. Expected: %s Received: %s", PING, pingResponseExpected, pingResponse)
+	}
+
+	// * 2 - REPLCONF
+	replConfResponseExpected := ToRespSimpleString(OK)
+	replConf1 := REPLCONF + " " + "listening-port" + " " + strconv.Itoa(r.Port)
+	replConf2 := REPLCONF + " " + "capa" + " " + "psync2"
+	replConfList := []string{
+		replConf1, replConf2,
+	}
+
+	for _, replConfMessage := range replConfList {
+		messageItems := strings.Split(replConfMessage, " ")
+		message := ToRespArrayString(messageItems...)
+		_, err = r.masterConnection.Write([]byte(message))
+		if err != nil {
+			return err
+		}
+
+		replConfResponse, err := BufioRead(reader, replConfResponseExpected)
+		// TODO: abstract out these checks as they will be run several times
+		if err != nil {
+			r.masterConnection.Close()
+			return err
+		}
+		if replConfResponse != replConfResponseExpected {
+			r.masterConnection.Close()
+			return fmt.Errorf("unexpected response to %s from master. Expected: %s Received: %s", REPLCONF, replConfResponseExpected, replConfResponse)
+		}
+	}
+
+	// * 3 - PSYNC
+	r.masterConnection.Write([]byte(ToRespArrayString(PSYNC, "?", "-1")))
+	psyncResponseExpected := buildPsyncResponse(strings.Repeat("*", REPLICA_ID_LENGTH)) // Slaves have no visibility of master IDs on startup.
+	psyncResponse, err := BufioRead(reader, psyncResponseExpected)
+	if err != nil {
+		r.masterConnection.Close()
+		return err
+	}
+	if !strings.HasPrefix(psyncResponse, SIMPLE_STRING+FULLRESYNC) {
+		r.masterConnection.Close()
+		return fmt.Errorf("unexpected response to %s from master. Expected: %s Received: %s", PSYNC, psyncResponseExpected, psyncResponse)
+	}
+
+	// * 4 - RDB File
+	fileLengthPrefix, err := reader.ReadString('\n')
+	if err != nil {
+		return err
+	}
+	fileLengthPrefix = strings.TrimRight(fileLengthPrefix, PROTOCOL_TERMINATOR)
+	fileLength, err := strconv.Atoi(strings.Replace(fileLengthPrefix, BULK_STRING, "", -1))
+	if err != nil {
+		return err
+	}
+
+	rdbFile, err := BufioRead(reader, fileLength)
+	if err != nil {
+		return err
+	}
+	r.rdbFile = []byte(rdbFile)
+	fmt.Println("Successfully executed handshake. Master ID: " + strings.Split(psyncResponse, " ")[1])
+	return nil
 }

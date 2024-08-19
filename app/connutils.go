@@ -7,11 +7,14 @@ import (
 	"net"
 )
 
+type BytesReadable interface {
+	int | string
+}
+
 func HandleConnection(conn net.Conn, server RedisServer) {
 	defer conn.Close()
 
-	fmt.Println("Client connected: ", conn.RemoteAddr())
-
+	fmt.Printf("Client connected to %s. Remote addr: %s\n", server.ReplicaInfo().role, conn.RemoteAddr())
 	respProcessor := NewRESPMessageReader()
 	reader := bufio.NewReader(conn)
 
@@ -27,9 +30,16 @@ func HandleConnection(conn net.Conn, server RedisServer) {
 			return
 		}
 
+		// test
+		if server.ReplicaInfo().role == SLAVE {
+			fmt.Println("received message: ", message)
+		}
+
 		ready, err := respProcessor.Read(message)
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println("RESP Processor read error: ", err)
+			respProcessor.Reset()
+
 			_, err = conn.Write([]byte(err.Error()))
 			if err != nil {
 				fmt.Println("Error writing:", err)
@@ -38,24 +48,33 @@ func HandleConnection(conn net.Conn, server RedisServer) {
 
 			continue
 		}
+
 		if ready {
 			commandComponents := respProcessor.GetCommandComponents()
 			err := server.RunCommand(commandComponents, conn)
 			if err != nil {
-				fmt.Printf("Error executing command %s in %s. Error: %s", commandComponents.Command, server.ReplicaInfo().role, err.Error())
+				fmt.Printf("Error executing command %s in %s. Error: %s\n", commandComponents.Command, server.ReplicaInfo().role, err.Error())
 			}
 			respProcessor.Reset()
 		}
 	}
 }
 
-func ReadStringFromConn(readStr string, c net.Conn) (string, error) {
-	responseBytes := make([]byte, len(readStr))
-	readBytes, err := bufio.NewReader(c).Read(responseBytes)
+func BufioRead[T BytesReadable](reader *bufio.Reader, readable T) (string, error) {
+	var lenBytes int
+	input := any(readable)
+	if str, ok := input.(string); ok {
+		lenBytes = len(str)
+	} else {
+		lenBytes = input.(int)
+	}
+
+	buf := make([]byte, lenBytes)
+	readBytes, err := reader.Read(buf)
 
 	if err != nil {
 		return "", err
 	}
 
-	return string(responseBytes[:readBytes]), nil
+	return string(buf[:readBytes]), nil
 }
