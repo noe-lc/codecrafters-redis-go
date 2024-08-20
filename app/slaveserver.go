@@ -120,13 +120,10 @@ func (r *RedisSlaveServer) runCommandInternally(cmp CommandComponents) (string, 
 			break
 		}
 		arg1, arg2 := cmp.Args[0], cmp.Args[1]
-		fmt.Println(" ARGS", arg1, arg2)
-		// REPLCONF ACK <offset>
-		if arg1 == ACK && arg2 == GETACK_FROM_REPLICA_ARG {
+		if arg1 == GETACK && arg2 == GETACK_FROM_REPLICA_ARG {
 			writeToMaster = true
-			result = ToRespArrayString(REPLCONF, GETACK, "0")
+			result = ToRespArrayString(REPLCONF, ACK, "0")
 		}
-		fmt.Println("not here")
 	default:
 		result, err = CommandExecutors[command].Execute(args, r)
 	}
