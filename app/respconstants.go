@@ -7,6 +7,14 @@ const (
 	FULLRESYNC = "FULLRESYNC"
 )
 
+// Argument constants
+const (
+	REPLICATION             = "replication"
+	ACK                     = "ACK"
+	GETACK                  = "GETACK"
+	GETACK_FROM_REPLICA_ARG = "*"
+)
+
 // RESP protocol constants. Use for interpreted strings, and regex only if characters are not escaped
 const (
 	PROTOCOL_TERMINATOR           = "\r\n"

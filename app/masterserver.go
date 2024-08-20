@@ -60,7 +60,7 @@ func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn) err
 	command, args, commandInput := cmp.Command, cmp.Args, cmp.Input
 	executor := CommandExecutors[command]
 	// 1. command executors produce the output to write
-	result, err := executor.Execute(args, r, conn)
+	result, err := executor.Execute(args, r)
 	if err != nil {
 		return err
 	}

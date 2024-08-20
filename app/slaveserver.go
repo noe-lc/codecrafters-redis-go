@@ -54,19 +54,21 @@ func (r *RedisSlaveServer) Start() error {
 		return err
 	}
 	r.listener = listener
-	masterAddress := DEFAULT_HOST_ADDRESS + ":" + strconv.Itoa(r.MasterPort)
-	conn, err := net.Dial("tcp", masterAddress)
+
+	conn, err := net.Dial("tcp", DEFAULT_HOST_ADDRESS+":"+strconv.Itoa(r.MasterPort))
 	if err != nil {
 		fmt.Println("Error connecting to master server")
 		return err
 	}
 	r.masterConnection = conn
+
+	masterConnReader := bufio.NewReader(conn)
 	handshakeErrChannel := make(chan error)
 	serverConnErrChannel := make(chan error)
 	go func() {
-		err := r.handshakeWithMaster()
+		err := r.handshakeWithMaster(masterConnReader)
 		handshakeErrChannel <- err
-		err = HandleHandshakeConnection(r.masterConnection, r)
+		err = HandleHandshakeConnection(r.masterConnection, r, masterConnReader)
 		handshakeErrChannel <- err
 	}()
 	go func() {
@@ -104,21 +106,70 @@ func (r *RedisSlaveServer) ReplicaInfo() ReplicaInfo {
 	return r.replicaInfo
 }
 
+func (r *RedisSlaveServer) runCommandInternally(cmp CommandComponents) (string, bool, error) {
+	var err error
+	var result string
+	var writeToMaster bool
+	command, args := cmp.Command, cmp.Args
+	fmt.Println("COMMAND", command)
+
+	switch command {
+	case REPLCONF:
+		argLen := len(cmp.Args)
+		if argLen < 2 {
+			break
+		}
+		arg1, arg2 := cmp.Args[0], cmp.Args[1]
+		fmt.Println(" ARGS", arg1, arg2)
+		// REPLCONF ACK <offset>
+		if arg1 == ACK && arg2 == GETACK_FROM_REPLICA_ARG {
+			writeToMaster = true
+			result = ToRespArrayString(REPLCONF, GETACK, "0")
+		}
+		fmt.Println("not here")
+	default:
+		result, err = CommandExecutors[command].Execute(args, r)
+	}
+
+	if err != nil {
+		return "", writeToMaster, nil
+	}
+
+	return result, writeToMaster, nil
+}
+
+// Use for commands sent by a client which is NOT master
 func (r RedisSlaveServer) RunCommand(cmp CommandComponents, conn net.Conn) error {
-	result, err := CommandExecutors[cmp.Command].Execute(cmp.Args, &r, conn)
+	result, _, err := r.runCommandInternally(cmp)
 	if err != nil {
 		return err
 	}
 
-	if r.masterConnection.RemoteAddr().String() == conn.RemoteAddr().String() {
+	/* if r.masterConnection.RemoteAddr().String() == conn.RemoteAddr().String() {
 		return nil
 	}
-
+	*/
 	_, err = conn.Write([]byte(result))
 	if err != nil {
 		return err
 	}
 
+	return nil
+}
+
+// Use for running commands sent by the master (handshake connection)
+func (r RedisSlaveServer) RunCommandSilently(cmp CommandComponents) error {
+	result, writeToMaster, err := r.runCommandInternally(cmp)
+	if err != nil {
+		return err
+	}
+	fmt.Println(result, writeToMaster, err)
+	if writeToMaster {
+		_, err = r.masterConnection.Write([]byte(result))
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -133,14 +184,13 @@ func (r *RedisSlaveServer) acceptConnections(l net.Listener) error {
 	}
 }
 
-func (r *RedisSlaveServer) handshakeWithMaster() error {
+func (r *RedisSlaveServer) handshakeWithMaster(reader *bufio.Reader) error {
 	// * 1 - PING
 	_, err := r.masterConnection.Write([]byte(ToRespArrayString(PING)))
 	if err != nil {
 		return err
 	}
 
-	reader := bufio.NewReader(r.masterConnection)
 	pingResponseExpected := ToRespSimpleString(PONG)
 	pingResponse, err := BufioRead(reader, pingResponseExpected)
 	if err != nil {

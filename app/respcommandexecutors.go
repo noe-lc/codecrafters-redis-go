@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"net"
 	"reflect"
 	"strings"
 )
@@ -28,7 +27,7 @@ type CommandExecutor struct {
 	argLen int
 	// signature string
 	Type    string
-	Execute func([]string, RedisServer, net.Conn) (string, error)
+	Execute func([]string, RedisServer /* , net.Conn */) (string, error)
 }
 
 func (c *CommandExecutor) GetArgLen() int {
@@ -41,13 +40,13 @@ var Memory = map[string]MemoryItem{}
 var (
 	Ping = CommandExecutor{
 		argLen: 1,
-		Execute: func(args []string, server RedisServer, conn net.Conn) (string, error) {
+		Execute: func(args []string, server RedisServer) (string, error) {
 			return ToRespSimpleString("PONG"), nil
 		},
 	}
 	Echo = CommandExecutor{
 		argLen: 2,
-		Execute: func(args []string, server RedisServer, conn net.Conn) (string, error) {
+		Execute: func(args []string, server RedisServer) (string, error) {
 			if len(args) == 0 {
 				return ToRespBulkString(""), nil
 			}
@@ -57,7 +56,7 @@ var (
 	Set = CommandExecutor{
 		argLen: 3,
 		Type:   WRITE,
-		Execute: func(args []string, server RedisServer, conn net.Conn) (string, error) {
+		Execute: func(args []string, server RedisServer) (string, error) {
 			if len(args) < 2 {
 				fmt.Println("args", args)
 				return "", errors.New("insufficient arguments")
@@ -95,7 +94,7 @@ var (
 	}
 	Get = CommandExecutor{
 		argLen: 2,
-		Execute: func(args []string, server RedisServer, conn net.Conn) (string, error) {
+		Execute: func(args []string, server RedisServer) (string, error) {
 			memItem, exists := Memory[args[0]]
 
 			if !exists {
@@ -115,11 +114,11 @@ var (
 	}
 	Info = CommandExecutor{
 		argLen: 2,
-		Execute: func(args []string, server RedisServer, conn net.Conn) (string, error) {
+		Execute: func(args []string, server RedisServer) (string, error) {
 			infoType := args[0]
 
 			switch infoType {
-			case "replication":
+			case REPLICATION:
 				response := []string{"#Replication"}
 				replicaInfo := server.ReplicaInfo()
 				valueOfReplInfo := reflect.ValueOf(replicaInfo)
@@ -141,13 +140,13 @@ var (
 	}
 	ReplConf = CommandExecutor{
 		argLen: 1,
-		Execute: func(args []string, server RedisServer, conn net.Conn) (string, error) {
+		Execute: func(args []string, server RedisServer) (string, error) {
 			return ToRespSimpleString(OK), nil
 		},
 	}
 	Psync = CommandExecutor{
 		argLen: 1,
-		Execute: func(args []string, server RedisServer, conn net.Conn) (string, error) {
+		Execute: func(args []string, server RedisServer) (string, error) {
 			return buildPsyncResponse(server.ReplicaInfo().masterReplid), nil
 		},
 	}

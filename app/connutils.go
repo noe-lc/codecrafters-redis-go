@@ -55,15 +55,15 @@ func HandleConnection(conn net.Conn, server RedisServer) {
 	}
 }
 
-func HandleHandshakeConnection(conn net.Conn, server RedisServer) error {
+func HandleHandshakeConnection(conn net.Conn, server RedisServer, reader *bufio.Reader) error {
 	fmt.Printf("Master connected. Remote addr: %s\n", conn.RemoteAddr())
 
 	defer conn.Close()
 	respProcessor := NewRESPMessageReader()
-	reader := bufio.NewReader(conn)
 
 	for {
 		message, err := reader.ReadString('\n')
+		fmt.Println(message)
 		if err == io.EOF {
 			fmt.Println("Connection terminated by master")
 			return err
