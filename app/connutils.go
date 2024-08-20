@@ -30,11 +30,6 @@ func HandleConnection(conn net.Conn, server RedisServer) {
 			return
 		}
 
-		// test
-		if server.ReplicaInfo().role == SLAVE {
-			fmt.Println("received message: ", message)
-		}
-
 		ready, err := respProcessor.Read(message)
 		if err != nil {
 			fmt.Println("RESP Processor read error: ", err)
@@ -45,6 +40,52 @@ func HandleConnection(conn net.Conn, server RedisServer) {
 				fmt.Println("Error writing:", err)
 				return
 			}
+
+			continue
+		}
+
+		if ready {
+			commandComponents := respProcessor.GetCommandComponents()
+			err := server.RunCommand(commandComponents, conn)
+			if err != nil {
+				fmt.Printf("Error executing command %s in %s. Error: %s\n", commandComponents.Command, server.ReplicaInfo().role, err.Error())
+			}
+			respProcessor.Reset()
+		}
+	}
+}
+
+func HandleHandshakeConnection(conn net.Conn, server RedisServer) error {
+	fmt.Printf("Master connected. Remote addr: %s\n", conn.RemoteAddr())
+
+	defer conn.Close()
+	respProcessor := NewRESPMessageReader()
+	reader := bufio.NewReader(conn)
+
+	for {
+		message, err := reader.ReadString('\n')
+		if err == io.EOF {
+			fmt.Println("Connection terminated by master")
+			return err
+		}
+		if err != nil {
+			fmt.Println("Error reading handshake message: ", err)
+			return err
+		}
+		ready, err := respProcessor.Read(message)
+		if err != nil {
+			LogServerError(server, "RESP Processor read error", err)
+			respProcessor.Reset()
+			// TODO: do not ignore actual errors.
+			// this has been commented out so that master replies during handshake
+			// do not generate unexpected writes to slave replicas
+			/*
+				_, err = conn.Write([]byte(err.Error()))
+				if err != nil {
+					fmt.Println("Error writing:", err)
+					return
+				}
+			*/
 
 			continue
 		}

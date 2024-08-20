@@ -4,8 +4,8 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"net"
-	"os"
 	"strconv"
 	"strings"
 )
@@ -54,8 +54,6 @@ func (r *RedisSlaveServer) Start() error {
 		return err
 	}
 	r.listener = listener
-
-	slaveServerChannel := make(chan bool)
 	masterAddress := DEFAULT_HOST_ADDRESS + ":" + strconv.Itoa(r.MasterPort)
 	conn, err := net.Dial("tcp", masterAddress)
 	if err != nil {
@@ -63,16 +61,39 @@ func (r *RedisSlaveServer) Start() error {
 		return err
 	}
 	r.masterConnection = conn
-	err = r.handshakeWithMaster()
-	if err != nil {
-		fmt.Println("Failed to execute handshake with master")
-		return err
-	}
-	go r.acceptConnections(r.listener)
-	go HandleConnection(r.masterConnection, r)
+	handshakeErrChannel := make(chan error)
+	serverConnErrChannel := make(chan error)
+	go func() {
+		err := r.handshakeWithMaster()
+		handshakeErrChannel <- err
+		err = HandleHandshakeConnection(r.masterConnection, r)
+		handshakeErrChannel <- err
+	}()
+	go func() {
+		err := r.acceptConnections(r.listener)
+		serverConnErrChannel <- err
+	}()
 
-	<-slaveServerChannel // ! this prevents the caller to return
-	return nil
+	// r.handshakeWithMaster()
+
+	for {
+		select {
+		case err := <-handshakeErrChannel:
+			if err == io.EOF {
+				fmt.Println("EOFF")
+				continue
+			}
+			if err != nil {
+				fmt.Println("Failed to execute handshake with master: ", err)
+				return err
+			}
+		case err := <-serverConnErrChannel:
+			if err != nil {
+				fmt.Println("Error accepting connection: ", err)
+				return err
+			}
+		}
+	}
 }
 
 func (r *RedisSlaveServer) Stop() error {
@@ -101,13 +122,12 @@ func (r RedisSlaveServer) RunCommand(cmp CommandComponents, conn net.Conn) error
 	return nil
 }
 
-func (r *RedisSlaveServer) acceptConnections(l net.Listener) {
+func (r *RedisSlaveServer) acceptConnections(l net.Listener) error {
 	fmt.Println("Slave server listening on port", r.Port)
 	for {
 		conn, err := l.Accept()
 		if err != nil {
-			fmt.Println("Error accepting connection: ", err.Error())
-			os.Exit(1)
+			return err
 		}
 		go HandleConnection(conn, r)
 	}
