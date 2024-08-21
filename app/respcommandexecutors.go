@@ -147,7 +147,12 @@ var (
 	Psync = CommandExecutor{
 		argLen: 1,
 		Execute: func(args []string, server RedisServer) (string, error) {
-			return buildPsyncResponse(server.ReplicaInfo().masterReplid), nil
+			return BuildPsyncResponse(server.ReplicaInfo().masterReplid), nil
+		},
+	}
+	Wait = CommandExecutor{
+		Execute: func(args []string, server RedisServer) (string, error) {
+			return ToRespInteger("0"), nil
 		},
 	}
 )
@@ -160,6 +165,7 @@ var CommandExecutors = map[string]CommandExecutor{
 	"INFO":     Info,
 	"REPLCONF": ReplConf,
 	"PSYNC":    Psync,
+	"WAIT":     Wait,
 }
 
 var CommandFlags = map[string]string{
@@ -175,10 +181,3 @@ func IsRespFlag(flag string) bool {
 	_, exists := CommandFlags[strings.ToUpper(flag)]
 	return exists
 }
-
-/* func ExecuteCommand(command string, args []string) string {
-	commandExecutor, exists := CommandExecutors[command]
-
-	if()
-
-} */

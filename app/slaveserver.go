@@ -235,7 +235,7 @@ func (r *RedisSlaveServer) handshakeWithMaster(reader *bufio.Reader) error {
 
 	// * 3 - PSYNC
 	r.masterConnection.Write([]byte(ToRespArrayString(PSYNC, "?", "-1")))
-	psyncResponseExpected := buildPsyncResponse(strings.Repeat("*", REPLICA_ID_LENGTH)) // Slaves have no visibility of master IDs on startup.
+	psyncResponseExpected := BuildPsyncResponse(strings.Repeat("*", REPLICA_ID_LENGTH)) // Slaves have no visibility of master IDs on startup.
 	psyncResponse, err := BufioRead(reader, psyncResponseExpected)
 	if err != nil {
 		r.masterConnection.Close()

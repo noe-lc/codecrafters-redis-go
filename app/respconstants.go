@@ -23,6 +23,9 @@ const (
 	BULK_STRING                   = "$"
 	NULL_BULK_STRING              = "$-1\r\n"
 	ARRAY                         = "*"
+	INTEGER                       = ":"
+	INTEGER_POSITIVE              = "+"
+	INTEGER_NEGATIVE              = "-"
 )
 
 // RESP protocol raw constants. Use for regex.

@@ -89,6 +89,14 @@ func ToRespArrayString(args ...string) string {
 	return respArrayString
 }
 
-func buildPsyncResponse(masterId string) string {
+func ToRespInteger(intString string) string {
+	if strings.HasPrefix(intString, INTEGER_NEGATIVE) {
+		return INTEGER + INTEGER_POSITIVE + intString + PROTOCOL_TERMINATOR
+	}
+
+	return INTEGER + intString + PROTOCOL_TERMINATOR
+}
+
+func BuildPsyncResponse(masterId string) string {
 	return SIMPLE_STRING + FULLRESYNC + " " + masterId + " " + "0" + PROTOCOL_TERMINATOR
 }
