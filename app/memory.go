@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+var Memory = map[string]MemoryItem{}
+
 type MemoryItem struct {
 	value   string
 	created time.Time
@@ -20,7 +22,7 @@ func NewMemoryItem(value string, expires string) *MemoryItem {
 	}
 }
 
-func (c *MemoryItem) getValue() (string, error) {
+func (c *MemoryItem) GetValue() (string, error) {
 	expires := c.created.Add(c.expires)
 
 	if c.expires.Milliseconds() != 0 && time.Since(expires).Milliseconds() > 0 {

@@ -10,6 +10,18 @@ import (
 	"strings"
 )
 
+type ReplicaInfo struct {
+	role string
+	// connectedSlaves            int
+	masterReplid     string
+	masterReplOffset int
+	// secondReplOffset           int
+	// replBacklogActive          int
+	// replBacklogSize            int
+	// replBacklogFirstByteOffset int
+	// replBacklogHistlen         any
+}
+
 type RedisSlaveServer struct {
 	Role             string
 	Host             string

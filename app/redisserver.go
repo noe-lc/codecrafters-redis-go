@@ -22,18 +22,6 @@ const (
 	REPLICA_ID_LENGTH = 40
 )
 
-type ReplicaInfo struct {
-	role string
-	// connectedSlaves            int
-	masterReplid     string
-	masterReplOffset int
-	// secondReplOffset           int
-	// replBacklogActive          int
-	// replBacklogSize            int
-	// replBacklogFirstByteOffset int
-	// replBacklogHistlen         any
-}
-
 type RedisServer interface {
 	Start() error
 	ReplicaInfo() ReplicaInfo

@@ -15,6 +15,8 @@ type RedisMasterServer struct {
 	listener           net.Listener
 	replicaConnections []net.Conn
 	replicaInfo        ReplicaInfo
+	replicaAcks        int
+	history            CommandHistory
 }
 
 func NewMasterServer(port int) RedisMasterServer {
@@ -59,6 +61,10 @@ func (r RedisMasterServer) ReplicaInfo() ReplicaInfo {
 func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn) error {
 	command, args, commandInput := cmp.Command, cmp.Args, cmp.Input
 	executor := CommandExecutors[command]
+
+	r.history.Append(CommandHistoryItem{command, args, false, 0})
+	modHistoryEntry := r.history.GetModifiableEntry(len(r.history))
+
 	// 1. command executors produce the output to write
 	result, err := executor.Execute(args, r)
 	if err != nil {
@@ -104,17 +110,15 @@ func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn) err
 		r.replicaConnections = append(r.replicaConnections, conn) */
 	default:
 		if executor.Type == WRITE {
-			r.propagateCommand(commandInput)
+			go r.propagateCommand(commandInput, modHistoryEntry)
 		}
-
-		return nil
 	}
 
+	modHistoryEntry.success = true
 	return nil
 }
 
-// TODO: store connection that sent the PSYNC command in order to propagate
-func (r RedisMasterServer) propagateCommand(rawInput string) []error {
+func (r *RedisMasterServer) propagateCommand(rawInput string, historyItem *CommandHistoryItem) []error {
 	errors := []error{}
 	for _, conn := range r.replicaConnections {
 		fmt.Println("Propagating command to: ", conn.RemoteAddr().String())
@@ -123,6 +127,7 @@ func (r RedisMasterServer) propagateCommand(rawInput string) []error {
 			fmt.Println("error propagating command: ", err)
 			errors = append(errors, err)
 		}
+		historyItem.acks += 1
 	}
 	return errors
 }

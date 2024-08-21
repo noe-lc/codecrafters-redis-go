@@ -6,16 +6,19 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Supported commands
 const (
 	PING     = "PING"
 	ECHO     = "ECHO"
+	INFO     = "INFO"
 	SET      = "SET"
 	GET      = "GET"
 	REPLCONF = "REPLCONF"
 	PSYNC    = "PSYNC"
+	WAIT     = "WAIT"
 )
 
 // Command types
@@ -24,28 +27,25 @@ const (
 	WRITE = "WRITE"
 )
 
-type CommandExecutor struct {
+type RespCommand struct {
 	argLen int
 	// signature string
 	Type    string
-	Execute func([]string, RedisServer /* , net.Conn */) (string, error)
+	Execute func([]string, RedisServer) (string, error)
 }
 
-func (c *CommandExecutor) GetArgLen() int {
+func (c *RespCommand) GetArgLen() int {
 	return c.argLen
 }
 
-var Memory = map[string]MemoryItem{}
-
-// ! Command executors do not use connections... for now
 var (
-	Ping = CommandExecutor{
+	Ping = RespCommand{
 		argLen: 1,
 		Execute: func(args []string, server RedisServer) (string, error) {
 			return ToRespSimpleString("PONG"), nil
 		},
 	}
-	Echo = CommandExecutor{
+	Echo = RespCommand{
 		argLen: 2,
 		Execute: func(args []string, server RedisServer) (string, error) {
 			if len(args) == 0 {
@@ -54,7 +54,7 @@ var (
 			return ToRespBulkString(args[0]), nil
 		},
 	}
-	Set = CommandExecutor{
+	Set = RespCommand{
 		argLen: 3,
 		Type:   WRITE,
 		Execute: func(args []string, server RedisServer) (string, error) {
@@ -93,7 +93,7 @@ var (
 			return ToRespSimpleString("OK"), nil
 		},
 	}
-	Get = CommandExecutor{
+	Get = RespCommand{
 		argLen: 2,
 		Execute: func(args []string, server RedisServer) (string, error) {
 			memItem, exists := Memory[args[0]]
@@ -103,7 +103,7 @@ var (
 				return NULL_BULK_STRING, nil
 			}
 
-			value, err := memItem.getValue()
+			value, err := memItem.GetValue()
 
 			if err != nil {
 				fmt.Printf("%s\n", err.Error())
@@ -113,7 +113,7 @@ var (
 			return ToRespBulkString(value), nil
 		},
 	}
-	Info = CommandExecutor{
+	Info = RespCommand{
 		argLen: 2,
 		Execute: func(args []string, server RedisServer) (string, error) {
 			infoType := args[0]
@@ -139,51 +139,96 @@ var (
 			}
 		},
 	}
-	ReplConf = CommandExecutor{
+	ReplConf = RespCommand{
 		argLen: 1,
 		Execute: func(args []string, server RedisServer) (string, error) {
 			return ToRespSimpleString(OK), nil
 		},
 	}
-	Psync = CommandExecutor{
+	Psync = RespCommand{
 		argLen: 1,
 		Execute: func(args []string, server RedisServer) (string, error) {
 			return BuildPsyncResponse(server.ReplicaInfo().masterReplid), nil
 		},
 	}
-	Wait = CommandExecutor{
+	Wait = RespCommand{
 		Execute: func(args []string, server RedisServer) (string, error) {
-			var replicaConnections string
 			masterServer, ok := server.(*RedisMasterServer)
-
-			if ok {
-				replicaConnections = strconv.Itoa(len(masterServer.replicaConnections))
-			} else {
-				replicaConnections = "0"
+			if !ok {
+				return ToRespInteger("0"), nil
 			}
 
-			return ToRespInteger(replicaConnections), nil
+			prevHistoryItem := masterServer.history.GetEntry(len(masterServer.history) - 2)
+			//prevHistoryType := GetRespCommand(prevHistoryItem.command).Type
+
+			if "" != WRITE {
+				replicaConnections := strconv.Itoa(len(masterServer.replicaConnections))
+				return ToRespInteger(replicaConnections), nil
+			}
+
+			numberOfReplicas, err := strconv.Atoi(args[0])
+			timeoutMillis, err := strconv.Atoi(args[0])
+			if err != nil {
+				return "", errors.New("invalid arguments for " + WAIT)
+			}
+
+			fmt.Println("previous item before wait: ", prevHistoryItem)
+			acksChan := make(chan int)
+			timeoutChan := make(chan bool)
+			readAcks := func() int {
+				return prevHistoryItem.acks
+			}
+
+			go func() {
+				time.Sleep(time.Duration(timeoutMillis) * time.Millisecond)
+				timeoutChan <- true
+			}()
+			go func() {
+				acksChan <- readAcks()
+			}()
+
+			for {
+				select {
+				case <-timeoutChan:
+					break
+				case acks := <-acksChan:
+					if acks == numberOfReplicas {
+
+					}
+					go func() {
+						acksChan <- readAcks()
+					}()
+				}
+			}
+
 		},
 	}
 )
 
-var CommandExecutors = map[string]CommandExecutor{
-	"PING":     Ping,
-	"ECHO":     Echo,
-	"GET":      Get,
-	"SET":      Set,
-	"INFO":     Info,
-	"REPLCONF": ReplConf,
-	"PSYNC":    Psync,
-	"WAIT":     Wait,
+var RespCommands = map[string]RespCommand{
+	PING:     Ping,
+	ECHO:     Echo,
+	GET:      Get,
+	SET:      Set,
+	INFO:     Info,
+	REPLCONF: ReplConf,
+	PSYNC:    Psync,
+	WAIT:     Wait,
 }
+
+var someVar = func() map[string]RespCommand { return RespCommands }
 
 var CommandFlags = map[string]string{
 	"PX": "PX",
 }
 
+func GetRespCommand(command string) RespCommand {
+	respCommand, _ := RespCommands[strings.ToUpper(command)]
+	return respCommand
+}
+
 func IsRESPCommandSupported(command string) bool {
-	_, exists := CommandExecutors[strings.ToUpper(command)]
+	_, exists := RespCommands[strings.ToUpper(command)]
 	return exists
 }
 
