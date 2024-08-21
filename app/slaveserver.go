@@ -19,6 +19,7 @@ type RedisSlaveServer struct {
 	masterConnection net.Conn
 	replicaInfo      ReplicaInfo
 	rdbFile          []byte
+	offset           int
 }
 
 func NewSlaveServer(port int, replicaOf string) (RedisSlaveServer, error) {
@@ -111,7 +112,6 @@ func (r *RedisSlaveServer) runCommandInternally(cmp CommandComponents) (string, 
 	var result string
 	var writeToMaster bool
 	command, args := cmp.Command, cmp.Args
-	fmt.Println("COMMAND", command)
 
 	switch command {
 	case REPLCONF:
@@ -122,7 +122,7 @@ func (r *RedisSlaveServer) runCommandInternally(cmp CommandComponents) (string, 
 		arg1, arg2 := cmp.Args[0], cmp.Args[1]
 		if arg1 == GETACK && arg2 == GETACK_FROM_REPLICA_ARG {
 			writeToMaster = true
-			result = ToRespArrayString(REPLCONF, ACK, "0")
+			result = ToRespArrayString(REPLCONF, ACK, strconv.Itoa(r.offset))
 		}
 	default:
 		result, err = CommandExecutors[command].Execute(args, r)
@@ -141,11 +141,6 @@ func (r RedisSlaveServer) RunCommand(cmp CommandComponents, conn net.Conn) error
 	if err != nil {
 		return err
 	}
-
-	/* if r.masterConnection.RemoteAddr().String() == conn.RemoteAddr().String() {
-		return nil
-	}
-	*/
 	_, err = conn.Write([]byte(result))
 	if err != nil {
 		return err
@@ -155,7 +150,7 @@ func (r RedisSlaveServer) RunCommand(cmp CommandComponents, conn net.Conn) error
 }
 
 // Use for running commands sent by the master (handshake connection)
-func (r RedisSlaveServer) RunCommandSilently(cmp CommandComponents) error {
+func (r *RedisSlaveServer) RunCommandSilently(cmp CommandComponents) error {
 	result, writeToMaster, err := r.runCommandInternally(cmp)
 	if err != nil {
 		return err
@@ -167,6 +162,11 @@ func (r RedisSlaveServer) RunCommandSilently(cmp CommandComponents) error {
 			return err
 		}
 	}
+
+	// seems like calling methods with pointer receivers which modify internal state should be called
+	// by methods that have a pointer receiver as well
+	r.updateProcessedBytes(len(cmp.Input))
+
 	return nil
 }
 
@@ -179,6 +179,11 @@ func (r *RedisSlaveServer) acceptConnections(l net.Listener) error {
 		}
 		go HandleConnection(conn, r)
 	}
+}
+
+func (r *RedisSlaveServer) updateProcessedBytes(bytes int) {
+	r.offset += bytes
+	fmt.Println("processed bytes increased by ", bytes, "final: ", r.offset)
 }
 
 func (r *RedisSlaveServer) handshakeWithMaster(reader *bufio.Reader) error {

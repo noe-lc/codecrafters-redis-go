@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -60,10 +61,14 @@ func HandleHandshakeConnection(conn net.Conn, server RedisServer, reader *bufio.
 
 	defer conn.Close()
 	respProcessor := NewRESPMessageReader()
+	slaveServer, ok := server.(*RedisSlaveServer)
+
+	if !ok {
+		return errors.New("cannot handle handshake connection from a non-slave server")
+	}
 
 	for {
 		message, err := reader.ReadString('\n')
-		fmt.Println(message)
 		if err == io.EOF {
 			fmt.Println("Connection terminated by master")
 			return err
@@ -74,7 +79,7 @@ func HandleHandshakeConnection(conn net.Conn, server RedisServer, reader *bufio.
 		}
 		ready, err := respProcessor.Read(message)
 		if err != nil {
-			LogServerError(server, "RESP Processor read error", err)
+			LogServerError(slaveServer, "RESP Processor read error", err)
 			respProcessor.Reset()
 			// TODO: do not ignore actual errors.
 			// this has been commented out so that master replies during handshake
@@ -92,7 +97,7 @@ func HandleHandshakeConnection(conn net.Conn, server RedisServer, reader *bufio.
 
 		if ready {
 			commandComponents := respProcessor.GetCommandComponents()
-			err := server.RunCommand(commandComponents, conn)
+			err := slaveServer.RunCommandSilently(commandComponents)
 			if err != nil {
 				fmt.Printf("Error executing command %s in %s. Error: %s\n", commandComponents.Command, server.ReplicaInfo().role, err.Error())
 			}
