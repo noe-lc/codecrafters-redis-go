@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -152,7 +153,16 @@ var (
 	}
 	Wait = CommandExecutor{
 		Execute: func(args []string, server RedisServer) (string, error) {
-			return ToRespInteger("0"), nil
+			var replicaConnections string
+			masterServer, ok := server.(*RedisMasterServer)
+
+			if ok {
+				replicaConnections = strconv.Itoa(len(masterServer.replicaConnections))
+			} else {
+				replicaConnections = "0"
+			}
+
+			return ToRespInteger(replicaConnections), nil
 		},
 	}
 )
