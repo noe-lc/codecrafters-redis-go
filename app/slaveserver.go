@@ -137,7 +137,7 @@ func (r *RedisSlaveServer) runCommandInternally(cmp CommandComponents) (string, 
 			result = ToRespArrayString(REPLCONF, ACK, strconv.Itoa(r.offset))
 		}
 	default:
-		result, err = CommandExecutors[command].Execute(args, r)
+		result, err = RespCommands[command].Execute(args, r)
 	}
 
 	if err != nil {

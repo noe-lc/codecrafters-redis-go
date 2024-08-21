@@ -34,6 +34,15 @@ type RespCommand struct {
 	Execute func([]string, RedisServer) (string, error)
 }
 
+type CommandComponents struct {
+	// the full raw string from which command and args is derived
+	Input string
+	// the RESP command
+	Command string
+	// the RESP command arguments
+	Args []string
+}
+
 func (c *RespCommand) GetArgLen() int {
 	return c.argLen
 }
@@ -176,7 +185,7 @@ var (
 			acksChan := make(chan int)
 			timeoutChan := make(chan bool)
 			readAcks := func() int {
-				return prevHistoryItem.acks
+				return prevHistoryItem.Acks
 			}
 
 			go func() {
@@ -216,18 +225,13 @@ var RespCommands = map[string]RespCommand{
 	WAIT:     Wait,
 }
 
-var someVar = func() map[string]RespCommand { return RespCommands }
-
 var CommandFlags = map[string]string{
+
 	"PX": "PX",
 }
 
-func GetRespCommand(command string) RespCommand {
-	respCommand, _ := RespCommands[strings.ToUpper(command)]
-	return respCommand
-}
-
 func IsRESPCommandSupported(command string) bool {
+
 	_, exists := RespCommands[strings.ToUpper(command)]
 	return exists
 }

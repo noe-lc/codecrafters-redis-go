@@ -16,15 +16,6 @@ type RESPMessageReader struct {
 	nextBytes int
 }
 
-type CommandComponents struct {
-	// the full raw string from which command and args is derived
-	Input string
-	// the RESP command
-	Command string
-	// the RESP command arguments
-	Args []string
-}
-
 func NewRESPMessageReader() RESPMessageReader {
 	return RESPMessageReader{nextBytes: -1}
 }
@@ -52,7 +43,7 @@ func (r *RESPMessageReader) Read(message string) (bool, error) {
 				return true, errors.New("invalid or unsupported resp command: " + trimmedMessage)
 			}
 			r.setCommand(trimmedMessage)
-			// r.setLengthLimit(CommandExecutors[r.command].argLen)
+			// r.setLengthLimit(RespCommands[r.command].argLen)
 		} else {
 			nextArg := trimmedMessage[:r.nextBytes] // TODO: validate this length
 			r.setArgs(append(r.args, nextArg))

@@ -60,7 +60,7 @@ func (r RedisMasterServer) ReplicaInfo() ReplicaInfo {
 
 func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn) error {
 	command, args, commandInput := cmp.Command, cmp.Args, cmp.Input
-	executor := CommandExecutors[command]
+	executor := RespCommands[command]
 
 	r.history.Append(CommandHistoryItem{command, args, false, 0})
 	modHistoryEntry := r.history.GetModifiableEntry(len(r.history))
@@ -114,7 +114,7 @@ func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn) err
 		}
 	}
 
-	modHistoryEntry.success = true
+	modHistoryEntry.Success = true
 	return nil
 }
 
@@ -127,7 +127,7 @@ func (r *RedisMasterServer) propagateCommand(rawInput string, historyItem *Comma
 			fmt.Println("error propagating command: ", err)
 			errors = append(errors, err)
 		}
-		historyItem.acks += 1
+		historyItem.Acks += 1
 	}
 	return errors
 }
