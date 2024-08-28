@@ -5,18 +5,24 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"regexp"
 	"strconv"
+	"strings"
 )
 
+type Replica struct {
+	conn net.Conn
+}
+
 type RedisMasterServer struct {
-	Role               string
-	Host               string
-	Port               int
-	listener           net.Listener
-	replicaConnections []net.Conn
-	replicaInfo        ReplicaInfo
-	replicaAcks        int
-	history            CommandHistory
+	Role        string
+	Host        string
+	Port        int
+	ReadNext    bool
+	listener    net.Listener
+	replicas    []Replica
+	replicaInfo ReplicaInfo
+	history     CommandHistory
 }
 
 func NewMasterServer(port int) RedisMasterServer {
@@ -60,13 +66,13 @@ func (r RedisMasterServer) ReplicaInfo() ReplicaInfo {
 
 func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn) error {
 	command, args, commandInput := cmp.Command, cmp.Args, cmp.Input
-	executor := RespCommands[command]
+	respCommand := RespCommands[command]
 
-	r.history.Append(CommandHistoryItem{command, args, false, 0})
-	modHistoryEntry := r.history.GetModifiableEntry(len(r.history))
+	// TODO: find a different way of avoiding circular references instead of using a pointer here
+	r.history.Append(CommandHistoryItem{&respCommand, args, false, 0})
 
 	// 1. command executors produce the output to write
-	result, err := executor.Execute(args, r)
+	result, err := respCommand.Execute(args, r)
 	if err != nil {
 		return err
 	}
@@ -93,9 +99,18 @@ func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn) err
 			return err
 		}
 
-		r.replicaConnections = append(r.replicaConnections, conn)
+		r.replicas = append(r.replicas, Replica{conn})
 	case REPLCONF:
 		break
+		concatArgs := strings.Join(args, " ")
+
+		// REPLCONF ACK <BYTES>
+		if matches, _ := regexp.MatchString(ACK+` `+`\d+`, concatArgs); matches {
+			prevModHistoryEntry := r.history.GetModifiableEntry(len(r.history) - 2)
+			prevModHistoryEntry.Acks += 1
+			return nil
+		}
+
 		/* indexOfPortArg := slices.Index(args, LISTENING_PORT_ARG)
 		indexOfPort := indexOfPortArg + 1
 		if indexOfPortArg == -1 || len(args) <= indexOfPort {
@@ -109,25 +124,36 @@ func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn) err
 		}
 		r.replicaConnections = append(r.replicaConnections, conn) */
 	default:
-		if executor.Type == WRITE {
-			go r.propagateCommand(commandInput, modHistoryEntry)
+		if respCommand.Type == WRITE {
+			go r.propagateCommand(commandInput /* modHistoryEntry */)
 		}
 	}
 
-	modHistoryEntry.Success = true
+	// modHistoryEntry.Success = true
 	return nil
 }
 
-func (r *RedisMasterServer) propagateCommand(rawInput string, historyItem *CommandHistoryItem) []error {
+func (r *RedisMasterServer) isReplicaConnection(addr string) bool {
+	for _, replica := range r.replicas {
+		fmt.Println("input", addr, "remote", replica.conn.RemoteAddr().String(), "local", replica.conn.LocalAddr().String())
+		if addr == replica.conn.RemoteAddr().String() {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *RedisMasterServer) propagateCommand(rawInput string /* historyItem *CommandHistoryItem */) []error {
 	errors := []error{}
-	for _, conn := range r.replicaConnections {
-		fmt.Println("Propagating command to: ", conn.RemoteAddr().String())
-		_, err := conn.Write([]byte(rawInput))
+	for _, replica := range r.replicas {
+		fmt.Println("Propagating command to: ", replica.conn.RemoteAddr().String())
+		_, err := replica.conn.Write([]byte(rawInput))
 		if err != nil {
 			fmt.Println("error propagating command: ", err)
 			errors = append(errors, err)
+			continue
 		}
-		historyItem.Acks += 1
+		// historyItem.Acks += 1
 	}
 	return errors
 }

@@ -1,14 +1,10 @@
 package main
 
 type CommandHistoryItem struct {
-	Command string
-	Args    []string
-	Success bool
-	Acks    int
-}
-
-func (c CommandHistoryItem) GetType() string {
-	return RespCommands[c.Command].Type
+	RespCommand *RespCommand
+	Args        []string
+	Success     bool
+	Acks        int
 }
 
 type CommandHistory []CommandHistoryItem

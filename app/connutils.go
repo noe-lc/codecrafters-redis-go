@@ -13,14 +13,28 @@ type BytesReadable interface {
 }
 
 func HandleConnection(conn net.Conn, server RedisServer) {
+	fmt.Printf("Client connected to %s. Remote addr: %s\n", server.ReplicaInfo().role, conn.RemoteAddr())
+
 	defer conn.Close()
 
-	fmt.Printf("Client connected to %s. Remote addr: %s\n", server.ReplicaInfo().role, conn.RemoteAddr())
-	respProcessor := NewRESPMessageReader()
+	isReplicaConn := false
 	reader := bufio.NewReader(conn)
+	respProcessor := NewRESPMessageReader()
+	masterServer, isMaster := server.(*RedisMasterServer)
+
+	fmt.Println(isMaster, isReplicaConn)
 
 	for {
+		if isMaster {
+			isReplicaConn = masterServer.isReplicaConnection(conn.RemoteAddr().String())
+		}
+		fmt.Println(isMaster, isReplicaConn)
+		if isReplicaConn && !masterServer.ReadNext {
+			continue
+		}
+
 		message, err := reader.ReadString('\n')
+		// fmt.Println(message)
 		if err != nil {
 			if err == io.EOF {
 				fmt.Println("Connection closed by client")
