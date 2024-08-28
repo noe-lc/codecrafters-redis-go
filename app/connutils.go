@@ -17,13 +17,13 @@ func HandleConnection(conn net.Conn, server RedisServer) {
 
 	defer conn.Close()
 
-	isReplicaConn := false
+	// isReplicaConn := false
 	reader := bufio.NewReader(conn)
 	respProcessor := NewRESPMessageReader()
-	masterServer, isMaster := server.(*RedisMasterServer)
+	// masterServer, isMaster := server.(*RedisMasterServer)
 
 	for {
-		// TODO: this might work for the WAIT with commands for now; but
+		/* // TODO: this might work for the WAIT with commands for now; but
 		// could be unreliable - another approach could be to save the previous command to WAIT
 		// and update it when REPLCONF ACK <bytes> is processed
 		if isMaster {
@@ -31,7 +31,7 @@ func HandleConnection(conn net.Conn, server RedisServer) {
 			if isReplicaConn && !masterServer.ReadNext {
 				continue
 			}
-		}
+		} */
 
 		message, err := reader.ReadString('\n')
 		if err != nil {

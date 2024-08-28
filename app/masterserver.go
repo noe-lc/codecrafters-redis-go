@@ -15,10 +15,11 @@ type Replica struct {
 }
 
 type RedisMasterServer struct {
-	Role        string
-	Host        string
-	Port        int
-	ReadNext    bool
+	Role string
+	Host string
+	Port int
+	// ReadNext    bool
+	waitAckFor  *CommandHistoryItem
 	listener    net.Listener
 	replicas    []Replica
 	replicaInfo ReplicaInfo
@@ -101,14 +102,12 @@ func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn) err
 
 		r.replicas = append(r.replicas, Replica{conn})
 	case REPLCONF:
-		break
 		concatArgs := strings.Join(args, " ")
 
 		// REPLCONF ACK <BYTES>
 		if matches, _ := regexp.MatchString(ACK+` `+`\d+`, concatArgs); matches {
-			prevModHistoryEntry := r.history.GetModifiableEntry(len(r.history) - 2)
-			prevModHistoryEntry.Acks += 1
-			return nil
+			r.waitAckFor.Acks += 1
+			fmt.Println("cmd wait for", r.waitAckFor)
 		}
 
 		/* indexOfPortArg := slices.Index(args, LISTENING_PORT_ARG)
