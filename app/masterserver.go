@@ -135,7 +135,6 @@ func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn) err
 
 func (r *RedisMasterServer) isReplicaConnection(addr string) bool {
 	for _, replica := range r.replicas {
-		fmt.Println("input", addr, "remote", replica.conn.RemoteAddr().String(), "local", replica.conn.LocalAddr().String())
 		if addr == replica.conn.RemoteAddr().String() {
 			return true
 		}

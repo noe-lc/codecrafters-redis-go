@@ -22,19 +22,18 @@ func HandleConnection(conn net.Conn, server RedisServer) {
 	respProcessor := NewRESPMessageReader()
 	masterServer, isMaster := server.(*RedisMasterServer)
 
-	fmt.Println(isMaster, isReplicaConn)
-
 	for {
+		// TODO: this might work for the WAIT with commands for now; but
+		// could be unreliable - another approach could be to save the previous command to WAIT
+		// and update it when REPLCONF ACK <bytes> is processed
 		if isMaster {
 			isReplicaConn = masterServer.isReplicaConnection(conn.RemoteAddr().String())
-		}
-		fmt.Println(isMaster, isReplicaConn)
-		if isReplicaConn && !masterServer.ReadNext {
-			continue
+			if isReplicaConn && !masterServer.ReadNext {
+				continue
+			}
 		}
 
 		message, err := reader.ReadString('\n')
-		// fmt.Println(message)
 		if err != nil {
 			if err == io.EOF {
 				fmt.Println("Connection closed by client")
@@ -61,6 +60,7 @@ func HandleConnection(conn net.Conn, server RedisServer) {
 
 		if ready {
 			commandComponents := respProcessor.GetCommandComponents()
+			fmt.Println("Ready to run ", commandComponents.Command, commandComponents.Args)
 			err := server.RunCommand(commandComponents, conn)
 			if err != nil {
 				fmt.Printf("Error executing command %s in %s. Error: %s\n", commandComponents.Command, server.ReplicaInfo().role, err.Error())

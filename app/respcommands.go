@@ -187,9 +187,8 @@ var (
 				return ToRespInteger(numberOfReplicas), nil
 			}
 
-			var lastAcksRead int
-			acksChan := make(chan int)
-			timer := time.After(time.Duration(timeoutMillis) * time.Millisecond)
+			lastAcksRead := 0
+			ackChan := make(chan bool)
 
 			for _, replica := range masterServer.replicas {
 				_, err := replica.conn.Write([]byte(ToRespArrayString(REPLCONF, GETACK, GETACK_FROM_REPLICA_ARG)))
@@ -199,8 +198,6 @@ var (
 				}
 
 				go func(replicaConn net.Conn) {
-					// reader := bufio.NewReader(replicaConn)
-					// bytesWritten, err := reader.ReadString('\n')
 					buf := make([]byte, 1024)
 					_, err := replicaConn.Read(buf)
 					fmt.Println(string(buf))
@@ -208,27 +205,22 @@ var (
 						fmt.Println("Failed get ACK from "+replicaConn.RemoteAddr().String(), err)
 					} else {
 						fmt.Println("Received response ")
-						lastAcksRead++
+						ackChan <- true
 					}
-
-					fmt.Println("last read: ", lastAcksRead)
-					acksChan <- lastAcksRead
-
 				}(replica.conn)
-
 			}
+
+			timer := time.After(time.Duration(timeoutMillis) * time.Millisecond)
 
 			for {
 				select {
-				case acks := <-acksChan:
-					// lastAcksRead = acks
-					fmt.Println("last acks read: ", acks)
-					if acks == numberOfReplicas {
+				case <-ackChan:
+					lastAcksRead++
+					fmt.Println("last acks read: ", lastAcksRead)
+					if lastAcksRead == numberOfReplicas {
 						masterServer.ReadNext = true
 						return ToRespInteger(strconv.Itoa(numberOfReplicas)), nil
 					}
-
-					continue
 				case <-timer:
 					fmt.Println("timeout reached, last read: ", lastAcksRead)
 					masterServer.ReadNext = true
