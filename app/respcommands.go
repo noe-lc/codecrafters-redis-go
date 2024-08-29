@@ -68,7 +68,6 @@ var (
 		Type:   WRITE,
 		Execute: func(args []string, server RedisServer) (string, error) {
 			if len(args) < 2 {
-				fmt.Println("args", args)
 				return "", errors.New("insufficient arguments")
 			}
 
@@ -166,6 +165,9 @@ var (
 			if !ok {
 				return ToRespInteger("0"), nil
 			}
+			if len(masterServer.replicas) < 1 {
+				return ToRespInteger("0"), nil
+			}
 			numberOfReplicas, err := strconv.Atoi(args[0])
 			if err != nil {
 				return "", errors.New("invalid num replicas arguments for " + WAIT)
@@ -175,23 +177,16 @@ var (
 				return "", errors.New("invalid timeout value for " + WAIT)
 			}
 
-			// masterServer.ReadNext = false
 			prevHistoryItem := masterServer.history.GetModifiableEntry(len(masterServer.history) - 2)
-			masterServer.waitAckFor = prevHistoryItem
-			fmt.Println("previous item before wait: ", *prevHistoryItem)
 
 			if prevHistoryItem.RespCommand.Type != WRITE {
 				numberOfReplicas := strconv.Itoa(len(masterServer.replicas))
 				return ToRespInteger(numberOfReplicas), nil
 			}
 
-			lastAcksRead := 0
 			ackChan := make(chan bool)
-			updateWaitAcks := func() {
-				fmt.Println("f wait for", masterServer.waitAckFor)
-				lastAcksRead = masterServer.waitAckFor.Acks
-				fmt.Println("las acks updated: ", lastAcksRead)
-			}
+			// handle the acknowledge update during command execution
+			masterServer.SetAcknowledgeItem(prevHistoryItem, ackChan)
 
 			for _, replica := range masterServer.replicas {
 				_, err := replica.conn.Write([]byte(ToRespArrayString(REPLCONF, GETACK, GETACK_FROM_REPLICA_ARG)))
@@ -199,25 +194,6 @@ var (
 					fmt.Println("Failed write GETACK to " + replica.conn.RemoteAddr().String())
 					continue
 				}
-
-				go func() {
-					// TODO: maybe add method and pass it both the history item and the channel to return to
-					// if REPLCONF <acks> is received
-					updateWaitAcks()
-					ackChan <- true
-				}()
-
-				/* go func(replicaConn net.Conn) {
-					buf := make([]byte, 1024)
-					_, err := replicaConn.Read(buf)
-					fmt.Println(string(buf))
-					if err != nil {
-						fmt.Println("Failed get ACK from "+replicaConn.RemoteAddr().String(), err)
-					} else {
-						fmt.Println("Received response ")
-						ackChan <- true
-					}
-				}(replica.conn) */
 			}
 
 			timer := time.After(time.Duration(timeoutMillis) * time.Millisecond)
@@ -225,17 +201,13 @@ var (
 			for {
 				select {
 				case <-ackChan:
-					// lastAcksRead++
-					fmt.Println("last acks read: ", lastAcksRead)
-					if lastAcksRead == numberOfReplicas {
-						// masterServer.ReadNext = true
-						masterServer.waitAckFor = nil
+					if masterServer.waitAckFor.Acks == numberOfReplicas {
+						masterServer.SetAcknowledgeItem(nil, nil)
 						return ToRespInteger(strconv.Itoa(numberOfReplicas)), nil
 					}
 				case <-timer:
-					fmt.Println("timeout reached, last read: ", lastAcksRead)
-					// masterServer.ReadNext = true
-					masterServer.waitAckFor = nil
+					lastAcksRead := masterServer.waitAckFor.Acks
+					masterServer.SetAcknowledgeItem(nil, nil)
 					return ToRespInteger(strconv.Itoa(lastAcksRead)), nil
 				}
 			}

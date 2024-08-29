@@ -20,6 +20,7 @@ type RedisMasterServer struct {
 	Port int
 	// ReadNext    bool
 	waitAckFor  *CommandHistoryItem
+	ackChannel  chan bool
 	listener    net.Listener
 	replicas    []Replica
 	replicaInfo ReplicaInfo
@@ -73,18 +74,26 @@ func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn) err
 	r.history.Append(CommandHistoryItem{&respCommand, args, false, 0})
 
 	// 1. command executors produce the output to write
-	result, err := respCommand.Execute(args, r)
-	if err != nil {
-		return err
-	}
-	_, err = conn.Write([]byte(result))
-	if err != nil {
-		return err
+	writeCommandOutput := func() error {
+		result, err := respCommand.Execute(args, r)
+		if err != nil {
+			return err
+		}
+		_, err = conn.Write([]byte(result))
+		if err != nil {
+			return err
+		}
+		return nil
 	}
 
 	// 2. handle side effects internally
 	switch command {
 	case PSYNC:
+		err := writeCommandOutput()
+		if err != nil {
+			return err
+		}
+
 		rdbFileBytes, err := hex.DecodeString(RDB_EMPTY_FILE_HEX)
 		if err != nil {
 			return err
@@ -107,7 +116,13 @@ func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn) err
 		// REPLCONF ACK <BYTES>
 		if matches, _ := regexp.MatchString(ACK+` `+`\d+`, concatArgs); matches {
 			r.waitAckFor.Acks += 1
-			fmt.Println("cmd wait for", r.waitAckFor)
+			r.ackChannel <- true
+			return nil
+		}
+
+		err := writeCommandOutput()
+		if err != nil {
+			return err
 		}
 
 		/* indexOfPortArg := slices.Index(args, LISTENING_PORT_ARG)
@@ -123,6 +138,11 @@ func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn) err
 		}
 		r.replicaConnections = append(r.replicaConnections, conn) */
 	default:
+		err := writeCommandOutput()
+		if err != nil {
+			return err
+		}
+
 		if respCommand.Type == WRITE {
 			go r.propagateCommand(commandInput /* modHistoryEntry */)
 		}
@@ -139,6 +159,11 @@ func (r *RedisMasterServer) isReplicaConnection(addr string) bool {
 		}
 	}
 	return false
+}
+
+func (r *RedisMasterServer) SetAcknowledgeItem(historyItem *CommandHistoryItem, ackChan chan bool) {
+	r.waitAckFor = historyItem
+	r.ackChannel = ackChan
 }
 
 func (r *RedisMasterServer) propagateCommand(rawInput string /* historyItem *CommandHistoryItem */) []error {
