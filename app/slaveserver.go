@@ -32,6 +32,7 @@ type RedisSlaveServer struct {
 	replicaInfo      ReplicaInfo
 	rdbFile          []byte
 	offset           int
+	rdbConfig        map[string]string
 }
 
 func NewSlaveServer(port int, replicaOf string) (RedisSlaveServer, error) {
@@ -180,6 +181,10 @@ func (r *RedisSlaveServer) RunCommandSilently(cmp CommandComponents) error {
 	r.updateProcessedBytes(len(cmp.Input))
 
 	return nil
+}
+
+func (r *RedisSlaveServer) GetRDBConfig() map[string]string {
+	return r.rdbConfig
 }
 
 func (r *RedisSlaveServer) acceptConnections(l net.Listener) error {

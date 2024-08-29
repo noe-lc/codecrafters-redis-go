@@ -8,6 +8,7 @@ import (
 const (
 	DEFAULT_HOST         = "localhost"
 	DEFAULT_PORT         = 6379
+	DEFAULT_MASTER       = ""
 	DEFAULT_HOST_ADDRESS = "0.0.0.0"
 )
 
@@ -26,9 +27,10 @@ type RedisServer interface {
 	Start() error
 	ReplicaInfo() ReplicaInfo
 	RunCommand(cmp CommandComponents, conn net.Conn) error
+	GetRDBConfig() map[string]string
 }
 
-func CreateRedisServer(port int, replicaOf string) (RedisServer, error) {
+func CreateRedisServer(port int, replicaOf string, rdbDir, rdbFileName string) (RedisServer, error) {
 	if replicaOf != "" {
 		server, err := NewSlaveServer(port, replicaOf)
 		if err != nil {
@@ -37,6 +39,6 @@ func CreateRedisServer(port int, replicaOf string) (RedisServer, error) {
 		return &server, nil
 	}
 
-	server := NewMasterServer(port)
+	server := NewMasterServer(port, rdbDir, rdbFileName)
 	return &server, nil
 }

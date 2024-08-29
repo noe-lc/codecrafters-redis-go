@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -19,6 +20,7 @@ const (
 	REPLCONF = "REPLCONF"
 	PSYNC    = "PSYNC"
 	WAIT     = "WAIT"
+	CONFIG   = "CONFIG"
 )
 
 // Command types
@@ -147,6 +149,20 @@ var (
 			}
 		},
 	}
+	Config = RespCommand{
+		Execute: func(args []string, server RedisServer) (string, error) {
+			concatArgs := strings.Join(args, " ")
+			configRdb, _ := regexp.MatchString(`^`+GET+` `+`(`+RDB_DIR_ARG+`|`+RDB_FILENAME_ARG+`)$`, concatArgs)
+
+			switch {
+			case configRdb:
+				rdbArg := args[1]
+				return ToRespArrayString(rdbArg, server.GetRDBConfig()[rdbArg]), nil
+			default:
+				return ToRespArrayString(""), nil
+			}
+		},
+	}
 	ReplConf = RespCommand{
 		argLen: 1,
 		Execute: func(args []string, server RedisServer) (string, error) {
@@ -225,6 +241,7 @@ var RespCommands = map[string]RespCommand{
 	REPLCONF: ReplConf,
 	PSYNC:    Psync,
 	WAIT:     Wait,
+	CONFIG:   Config,
 }
 
 var CommandFlags = map[string]string{

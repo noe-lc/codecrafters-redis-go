@@ -44,10 +44,19 @@ const (
 	PARTIAL_RESP_ARRAY = `^\` + ARRAY + `\d+` + PROTOCOL_TERMINATOR_RAW + `$`
 )
 
-// Other constants
+// RDB constants
 const (
 	RDB_EMPTY_FILE_HEX = "524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2"
+	RDB_DIR            = "rdb"
+	RDB_DIR_ARG        = "dir"
+	RDB_FILENAME       = "rdbfile"
+	RDB_FILENAME_ARG   = "dbfilename"
 )
+
+var RDB_CONFIG = map[string]string{
+	RDB_DIR_ARG:      RDB_DIR,
+	RDB_FILENAME_ARG: RDB_FILENAME,
+}
 
 // Handshake constants
 const (

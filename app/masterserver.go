@@ -15,25 +15,29 @@ type Replica struct {
 }
 
 type RedisMasterServer struct {
-	Role string
-	Host string
-	Port int
-	// ReadNext    bool
+	Role        string
+	Host        string
+	Port        int
+	listener    net.Listener
 	waitAckFor  *CommandHistoryItem
 	ackChannel  chan bool
-	listener    net.Listener
 	replicas    []Replica
 	replicaInfo ReplicaInfo
 	history     CommandHistory
+	rdbConfig   map[string]string
 }
 
-func NewMasterServer(port int) RedisMasterServer {
+func NewMasterServer(port int, rdbDir, rdbFileName string) RedisMasterServer {
 	server := RedisMasterServer{
 		Role: MASTER,
 		Host: DEFAULT_HOST,
 		Port: port,
 		replicaInfo: ReplicaInfo{
 			role: MASTER,
+		},
+		rdbConfig: map[string]string{
+			RDB_DIR_ARG:      rdbDir,
+			RDB_FILENAME_ARG: rdbFileName,
 		},
 	}
 
@@ -152,18 +156,13 @@ func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn) err
 	return nil
 }
 
-func (r *RedisMasterServer) isReplicaConnection(addr string) bool {
-	for _, replica := range r.replicas {
-		if addr == replica.conn.RemoteAddr().String() {
-			return true
-		}
-	}
-	return false
-}
-
 func (r *RedisMasterServer) SetAcknowledgeItem(historyItem *CommandHistoryItem, ackChan chan bool) {
 	r.waitAckFor = historyItem
 	r.ackChannel = ackChan
+}
+
+func (r *RedisMasterServer) GetRDBConfig() map[string]string {
+	return r.rdbConfig
 }
 
 func (r *RedisMasterServer) propagateCommand(rawInput string /* historyItem *CommandHistoryItem */) []error {
