@@ -5,6 +5,10 @@ import (
 	"time"
 )
 
+const (
+	EXPIRED_KEY = "expired key"
+)
+
 var Memory = map[string]MemoryItem{}
 
 type MemoryItem struct {
@@ -26,7 +30,7 @@ func (c *MemoryItem) GetValue() (string, error) {
 	expires := c.created.Add(c.expires)
 
 	if c.expires.Milliseconds() != 0 && time.Since(expires).Milliseconds() > 0 {
-		return "", errors.New("expired key")
+		return "", errors.New(EXPIRED_KEY)
 	}
 
 	return c.value, nil

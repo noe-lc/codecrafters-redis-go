@@ -9,8 +9,8 @@ import (
 func main() {
 	port := flag.Int("port", DEFAULT_PORT, "port number on which the server will run")
 	replicaOf := flag.String("replicaof", DEFAULT_MASTER, "address of the master server from which to create the replica")
-	rdbFileDir := flag.String("dir", RDB_DIR, "directory where the RDB file is located")
-	rdbFileName := flag.String("dbfilename", RDB_FILENAME, "name of the RDB file")
+	rdbFileDir := flag.String("dir", RDB_DEFAULT_DIR, "directory where the RDB file is located")
+	rdbFileName := flag.String("dbfilename", RDB_DEFAULT_FILENAME, "name of the RDB file")
 
 	flag.Parse()
 

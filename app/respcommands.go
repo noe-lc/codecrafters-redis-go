@@ -116,8 +116,8 @@ var (
 			value, err := memItem.GetValue()
 
 			if err != nil {
-				fmt.Printf("%s\n", err.Error())
-				return NULL_BULK_STRING, nil
+				fmt.Printf("Failed to get key %s: %v\n", args[0], err)
+				return NULL_BULK_STRING, err
 			}
 
 			return ToRespBulkString(value), nil
@@ -228,6 +228,11 @@ var (
 				}
 			}
 
+		},
+	}
+	Save = RespCommand{
+		Execute: func(s []string, rs RedisServer) (string, error) {
+			return "", nil
 		},
 	}
 )
