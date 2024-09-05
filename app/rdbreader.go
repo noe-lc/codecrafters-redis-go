@@ -2,10 +2,15 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"os"
+	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -22,36 +27,92 @@ func LoadFile(path string) error {
 	reader := bufio.NewReader(f)
 	metadataByte, _ := RDBHexStringToByte(METADATA_START)
 	dbSubsectionByte, _ := RDBHexStringToByte(DB_SUBSECTION_START)
-	hashTableByte, _ := RDBHexStringToByte(HASH_TABLE_START)
+	// hashTableByte, _ := RDBHexStringToByte(HASH_TABLE_START)
 
+	fmt.Println(metadataByte)
 	magicStringBytes, err := reader.ReadBytes(metadataByte)
+	if err == io.EOF {
+		fmt.Println("EOF here", magicStringBytes)
+	}
 	if err != nil {
 		return err
 	}
 
-	fmt.Println(string(magicStringBytes))
+	fmt.Println("header:\n", string(magicStringBytes))
 
 	metadataBytes, err := reader.ReadBytes(dbSubsectionByte)
 	if err != nil {
 		return err
 	}
 
-	nextByteIndex := 0
-	for nextByteIndex < len(metadataBytes)-1 {
-		attrType, bits := decodeByte(metadataBytes[nextByteIndex])
+	lastKey := ""
+	nextInsert := "key"
+	metadataMap := map[string]interface{}{}
+	for len(metadataBytes) > 0 {
+		var value interface{}
+		attrType, bits := decodeByte(metadataBytes[0])
 		if attrType == "" {
-			return fmt.Errorf("failed to decode byte %v at position %i", metadataBytes[nextByteIndex], nextByteIndex)
+			return fmt.Errorf("failed to decode byte %v", metadataBytes[0])
 		}
 
 		fmt.Println("next type: ", attrType)
 		ignoreBits, useBits := bits[0], bits[1]
-		nextByteIndex += (ignoreBits + useBits) / 8
-		sizeBinaryBits := bytesToBinaryString(metadataBytes[:nextByteIndex])[ignoreBits:]
+		valueSizeUpperIndex := ignoreBits + useBits + 1
+		fmt.Println("ignore and use bits:", ignoreBits, useBits)
+
+		if attrType == "string" {
+			sizeBinaryBits := bytesToBinaryString(metadataBytes[ignoreBits:valueSizeUpperIndex])
+			fmt.Println("number of bits for string:", len(sizeBinaryBits))
+			valueSize, err := strconv.ParseInt(sizeBinaryBits, 2, useBits)
+			if err != nil {
+				fmt.Println("error parsing valueSize for string", sizeBinaryBits)
+				break
+			}
+			value = string(metadataBytes[valueSizeUpperIndex : valueSize+1])
+			fmt.Println("string value: ", value)
+
+		}
+		if attrType == "int" {
+			valueBytes := metadataBytes[valueSizeUpperIndex : (useBits/8)+1]
+			if useBits > 8 {
+				slices.Reverse(valueBytes)
+			}
+			fmt.Println("integer value bytes: ", valueBytes)
+			value, err = binary.ReadVarint(bytes.NewReader(valueBytes))
+			if err != nil {
+				fmt.Println("failed to decode int bytes")
+				break
+			}
+
+			fmt.Println("int value: ", value)
+			// sizeBinaryBits = strings. // invert string
+
+			/* sizeBinaryBits := bytesToBinaryString(metadataBytes[ignoreBits:valueSizeUpperIndex])
+			fmt.Println("number of bits for int:", len(sizeBinaryBits))
+			valueSize, err := strconv.ParseInt(sizeBinaryBits, 2, useBits)
+			if err != nil {
+				fmt.Println("error parsing valueSize for int", sizeBinaryBits)
+			} */
+		}
+
+		if nextInsert == "key" {
+			nextInsert = "value"
+			lastKey = value.(string)
+			metadataMap[lastKey] = nil
+		} else {
+			nextInsert = "key"
+			metadataMap[lastKey] = value
+		}
+
+		metadataBytes = metadataBytes[valueSizeUpperIndex:]
 
 		// TODO: left here
 
 	}
 
+	fmt.Println("metadata:\n", metadataMap)
+
+	return nil
 }
 
 func GetRDBKeys(key string) string {

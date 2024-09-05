@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -235,18 +236,28 @@ var (
 			return "", nil
 		},
 	}
+	TestKey = RespCommand{
+		Execute: func(s []string, rs RedisServer) (string, error) {
+			err := LoadFile(filepath.Join("..", RDB_DEFAULT_DIR, RDB_DEFAULT_FILENAME))
+			if err != nil {
+				fmt.Println(err)
+			}
+			return "", nil
+		},
+	}
 )
 
 var RespCommands = map[string]RespCommand{
-	PING:     Ping,
-	ECHO:     Echo,
-	GET:      Get,
-	SET:      Set,
-	INFO:     Info,
-	REPLCONF: ReplConf,
-	PSYNC:    Psync,
-	WAIT:     Wait,
-	CONFIG:   Config,
+	PING:      Ping,
+	ECHO:      Echo,
+	GET:       Get,
+	SET:       Set,
+	INFO:      Info,
+	REPLCONF:  ReplConf,
+	PSYNC:     Psync,
+	WAIT:      Wait,
+	CONFIG:    Config,
+	"TESTKEY": TestKey,
 }
 
 var CommandFlags = map[string]string{
