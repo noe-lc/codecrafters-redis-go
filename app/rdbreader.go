@@ -24,12 +24,12 @@ func LoadFile(path string) error {
 		f.Close()
 	}()
 
-	reader := bufio.NewReader(f)
+	hexReader := hex.NewDecoder(f)
+	reader := bufio.NewReader(hexReader)
 	metadataByte, _ := RDBHexStringToByte(METADATA_START)
 	dbSubsectionByte, _ := RDBHexStringToByte(DB_SUBSECTION_START)
 	// hashTableByte, _ := RDBHexStringToByte(HASH_TABLE_START)
 
-	fmt.Println(metadataByte)
 	magicStringBytes, err := reader.ReadBytes(metadataByte)
 	if err == io.EOF {
 		fmt.Println("EOF here", magicStringBytes)
@@ -50,22 +50,26 @@ func LoadFile(path string) error {
 	metadataMap := map[string]interface{}{}
 	for len(metadataBytes) > 0 {
 		var value interface{}
-		attrType, bits := decodeByte(metadataBytes[0])
+		attrType, bitRange := decodeByte(metadataBytes[0])
 		if attrType == "" {
 			return fmt.Errorf("failed to decode byte %v", metadataBytes[0])
 		}
 
 		fmt.Println("next type: ", attrType)
-		ignoreBits, useBits := bits[0], bits[1]
+		// byteBinaryString := fmt.Sprint("%b", metadataBytes[0])
+		ignoreBits, useBits := bitRange[0], bitRange[1]
+		useBytes := (ignoreBits + useBits) / 8
+		sizeBinaryBits := bytesToBinaryString(metadataBytes[:useBytes])
+
 		valueSizeUpperIndex := ignoreBits + useBits + 1
-		fmt.Println("ignore and use bits:", ignoreBits, useBits)
+		fmt.Println("ignore and use bits:", ignoreBits, useBits, sizeBinaryBits)
 
 		if attrType == "string" {
 			sizeBinaryBits := bytesToBinaryString(metadataBytes[ignoreBits:valueSizeUpperIndex])
 			fmt.Println("number of bits for string:", len(sizeBinaryBits))
 			valueSize, err := strconv.ParseInt(sizeBinaryBits, 2, useBits)
 			if err != nil {
-				fmt.Println("error parsing valueSize for string", sizeBinaryBits)
+				fmt.Printf("error parsing valueSize for string %s, %v\n", sizeBinaryBits, err)
 				break
 			}
 			value = string(metadataBytes[valueSizeUpperIndex : valueSize+1])
@@ -80,7 +84,7 @@ func LoadFile(path string) error {
 			fmt.Println("integer value bytes: ", valueBytes)
 			value, err = binary.ReadVarint(bytes.NewReader(valueBytes))
 			if err != nil {
-				fmt.Println("failed to decode int bytes")
+				fmt.Println("failed to decode int bytes", err)
 				break
 			}
 
