@@ -64,12 +64,13 @@ var RDB_CONFIG = map[string]string{
 }
 
 const (
-	MAGIC_STRING        = "REDIS0007"
-	METADATA_START      = "FA"
-	DB_SUBSECTION_START = "FE"
-	HASH_TABLE_START    = "FB"
+	RDB_MAGIC_STRING        = "REDIS0007"
+	RDB_METADATA_START      = "FA"
+	RDB_DB_SUBSECTION_START = "FE"
+	RDB_HASH_TABLE_START    = "FB"
+	RDB_END_OF_FILE         = "FF"
 )
 
 // byte1
 //    1 2 3 4 5 6
-//    ^ - - u u u         
+//    ^ - - u u u

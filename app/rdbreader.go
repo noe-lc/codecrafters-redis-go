@@ -24,23 +24,26 @@ func LoadFile(path string) error {
 		f.Close()
 	}()
 
+	fileHash := make([]byte, 8)
 	hexReader := hex.NewDecoder(f)
 	reader := bufio.NewReader(hexReader)
-	metadataByte, _ := RDBHexStringToByte(METADATA_START)
-	dbSubsectionByte, _ := RDBHexStringToByte(DB_SUBSECTION_START)
-	// hashTableByte, _ := RDBHexStringToByte(HASH_TABLE_START)
+	metadataByte, _ := RDBHexStringToByte(RDB_METADATA_START)
+	dbSubsectionByte, _ := RDBHexStringToByte(RDB_DB_SUBSECTION_START)
+	// hashTableByte, _ := RDBHexStringToByte(RDB_HASH_TABLE_START)
+	endOfFileByte, _ := RDBHexStringToByte(RDB_END_OF_FILE)
 
 	magicStringBytes, err := reader.ReadBytes(metadataByte)
-	if err == io.EOF {
-		fmt.Println("EOF here", magicStringBytes)
-	}
 	if err != nil {
+		if err == io.EOF {
+			fmt.Println("EOF here", magicStringBytes)
+			return err
+		}
 		return err
 	}
 
 	fmt.Println("header:\n", string(magicStringBytes))
 
-	metadataBytes, err := reader.ReadBytes(dbSubsectionByte)
+	metadataSectionBytes, err := reader.ReadBytes(dbSubsectionByte)
 	if err != nil {
 		return err
 	}
@@ -48,73 +51,109 @@ func LoadFile(path string) error {
 	lastKey := ""
 	nextInsert := "key"
 	metadataMap := map[string]interface{}{}
-	for len(metadataBytes) > 0 {
-		var value interface{}
-		attrType, bitRange := decodeByte(metadataBytes[0])
-		if attrType == "" {
-			return fmt.Errorf("failed to decode byte %v", metadataBytes[0])
-		}
+	metadataSectionBytes = metadataSectionBytes[:len(metadataSectionBytes)-1]
+	metadataReader := bufio.NewReader(bytes.NewReader(metadataSectionBytes))
 
-		fmt.Println("next type: ", attrType)
-		// byteBinaryString := fmt.Sprint("%b", metadataBytes[0])
-		ignoreBits, useBits := bitRange[0], bitRange[1]
-		useBytes := (ignoreBits + useBits) / 8
-		sizeBinaryBits := bytesToBinaryString(metadataBytes[:useBytes])
-
-		valueSizeUpperIndex := ignoreBits + useBits + 1
-		fmt.Println("ignore and use bits:", ignoreBits, useBits, sizeBinaryBits)
-
-		if attrType == "string" {
-			sizeBinaryBits := bytesToBinaryString(metadataBytes[ignoreBits:valueSizeUpperIndex])
-			fmt.Println("number of bits for string:", len(sizeBinaryBits))
-			valueSize, err := strconv.ParseInt(sizeBinaryBits, 2, useBits)
-			if err != nil {
-				fmt.Printf("error parsing valueSize for string %s, %v\n", sizeBinaryBits, err)
+	for {
+		sectionBytes, err := metadataReader.ReadBytes(metadataByte)
+		if err != nil {
+			if err != io.EOF {
+				return fmt.Errorf("error reading metadata: %v", err)
+			}
+			if len(sectionBytes) == 0 {
+				fmt.Println("finished reading metadata")
 				break
 			}
-			value = string(metadataBytes[valueSizeUpperIndex : valueSize+1])
-			fmt.Println("string value: ", value)
-
+			break // end of metadata read
 		}
-		if attrType == "int" {
-			valueBytes := metadataBytes[valueSizeUpperIndex : (useBits/8)+1]
-			if useBits > 8 {
-				slices.Reverse(valueBytes)
-			}
-			fmt.Println("integer value bytes: ", valueBytes)
-			value, err = binary.ReadVarint(bytes.NewReader(valueBytes))
-			if err != nil {
-				fmt.Println("failed to decode int bytes", err)
+
+		sectionBytes = sectionBytes[:len(sectionBytes)-1] // remove last byte (the subsection separator)
+
+		for {
+			if len(sectionBytes) == 0 {
 				break
 			}
 
-			fmt.Println("int value: ", value)
-			// sizeBinaryBits = strings. // invert string
+			fmt.Println("section bytes:", sectionBytes)
 
-			/* sizeBinaryBits := bytesToBinaryString(metadataBytes[ignoreBits:valueSizeUpperIndex])
-			fmt.Println("number of bits for int:", len(sizeBinaryBits))
-			valueSize, err := strconv.ParseInt(sizeBinaryBits, 2, useBits)
-			if err != nil {
-				fmt.Println("error parsing valueSize for int", sizeBinaryBits)
-			} */
+			var value interface{}
+			attrType, bitRange := decodeByte(sectionBytes[0])
+			if attrType == "" {
+				return fmt.Errorf("failed to decode byte %v", sectionBytes[0])
+			}
+
+			fmt.Println("next type: ", attrType)
+			ignoreBits, useBits := bitRange[0], bitRange[1]
+			useBytes := (ignoreBits + useBits) / 8                          // calculate total bytes for read
+			binaryBitString := bytesToBinaryString(sectionBytes[:useBytes]) // read up to nth index byte from metadata into binarym
+			sizeBinaryBits := binaryBitString[ignoreBits:]                  // take the bits that represent the size
+			fmt.Println("ignore and use bits:", ignoreBits, useBits, sizeBinaryBits)
+
+			if attrType == "string" {
+				fmt.Println("string size bits:", len(sizeBinaryBits))
+				stringLength, err := strconv.ParseInt(sizeBinaryBits, 2, useBits)
+				if err != nil {
+					fmt.Printf("error parsing size binary string %s: %v\n", sizeBinaryBits, err)
+					break
+				}
+				fmt.Println("string byte length", stringLength)
+				value = string(sectionBytes[useBytes : stringLength+1])
+				sectionBytes = sectionBytes[stringLength+1:]
+				fmt.Println("string value: ", value)
+
+			}
+
+			if attrType == "int" {
+				if useBits > 8 {
+					sizeBinaryBitSlice := strings.Split(sizeBinaryBits, "") // TODO: check how to reverse an actual string
+					slices.Reverse(sizeBinaryBitSlice)
+					sizeBinaryBits = strings.Join(sizeBinaryBitSlice, "")
+				}
+				fmt.Println("integer value bytes: ", sizeBinaryBits)
+				value, err = binary.ReadVarint(bytes.NewReader([]byte(sizeBinaryBits)))
+				if err != nil {
+					fmt.Println("failed to decode int bytes", err)
+					break
+				}
+
+				sectionBytes = sectionBytes[useBytes:]
+				fmt.Println("int value: ", value)
+			}
+
+			if nextInsert == "key" {
+				nextInsert = "value"
+				lastKey = value.(string)
+				metadataMap[lastKey] = nil
+			} else {
+				nextInsert = "key"
+				metadataMap[lastKey] = value
+			}
+
 		}
 
-		if nextInsert == "key" {
-			nextInsert = "value"
-			lastKey = value.(string)
-			metadataMap[lastKey] = nil
-		} else {
-			nextInsert = "key"
-			metadataMap[lastKey] = value
-		}
-
-		metadataBytes = metadataBytes[valueSizeUpperIndex:]
-
-		// TODO: left here
-
+		fmt.Println("metadata:\n", metadataMap)
 	}
 
-	fmt.Println("metadata:\n", metadataMap)
+	dbIndex, err := reader.Peek(1)
+	if err != nil {
+		return err
+	}
+
+	// empty rdb file
+	if dbIndex[0] == 0xC0 {
+		_, err := reader.ReadBytes(endOfFileByte)
+		if err != nil {
+			return err
+		}
+		bytesRead, _ := reader.Read(fileHash)
+		fmt.Println("Finished reading file. Hash is: ", fileHash[:bytesRead])
+	}
+
+	// non-empty rdb file
+
+	for {
+		break
+	}
 
 	return nil
 }
