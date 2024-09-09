@@ -69,6 +69,7 @@ const (
 	RDB_DB_SUBSECTION_START = "FE"
 	RDB_HASH_TABLE_START    = "FB"
 	RDB_END_OF_FILE         = "FF"
+	RDB_STRING_KEY          = "00"
 )
 
 // byte1
