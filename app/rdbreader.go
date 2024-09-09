@@ -209,8 +209,9 @@ func RDBHexStringToByte(hexString string) (byte, error) {
 // decodeBytes returns the RDBType and an 2-item array with the exact bits to ignore and use.
 // If there are no matches, ti returns an empty string and [2]int{0,0}
 func decodeBytes[T RDBValue](inputBytes []byte) (T, error) {
-	var valueType string
 	var err error
+	var valueType string
+	var decodedValue T
 	var bitRange [2]int = [2]int{0, 0}
 	startByte := inputBytes[0]
 
