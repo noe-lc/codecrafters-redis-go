@@ -266,12 +266,12 @@ func GetRDBKeys(filePath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	tableSizeBytes := make([]byte, 2)
+	tableSizeBytes := make([]byte, 1)
 	_, err = reader.Read(tableSizeBytes)
 	if err != nil {
 		return "", err
 	}
-	tableExpireSizeBytes := make([]byte, 2)
+	tableExpireSizeBytes := make([]byte, 1)
 	_, err = reader.Read(tableExpireSizeBytes)
 	if err != nil {
 		return "", err
@@ -279,7 +279,7 @@ func GetRDBKeys(filePath string) (string, error) {
 	tableSize, _ := binary.ReadUvarint(bytes.NewReader(tableSizeBytes))
 	tableExpireSize, _ := binary.ReadUvarint(bytes.NewReader(tableExpireSizeBytes))
 
-	fmt.Println(tableExpireSize)
+	fmt.Println("tableSize, expireSize", tableSize, tableExpireSize)
 
 	for i := 0; i < int(tableSize); i++ {
 		_, err := reader.ReadBytes(stringKeyByte)
@@ -298,6 +298,7 @@ func GetRDBKeys(filePath string) (string, error) {
 			}
 
 			valueType, bitRange, sizeEncodingBytes, err := decodeTypeAttrs(sizeBytes[0])
+			fmt.Println("attrs", valueType, bitRange, sizeEncodingBytes, err)
 
 			if err != nil {
 				fmt.Println("failed to decode type attributes for ", sizeBytes[0])
@@ -305,22 +306,24 @@ func GetRDBKeys(filePath string) (string, error) {
 			}
 
 			var value string
-			valueSize := make([]byte, sizeEncodingBytes)
-			_, err = reader.Read(valueSize)
-
+			valueSizeBytes := make([]byte, 6)
+			fmt.Println("valueSizeBytes", sizeEncodingBytes, valueSizeBytes)
+			_, err = reader.Read(valueSizeBytes)
 			if err != nil {
-				fmt.Println("")
+				fmt.Println("error reading value size")
 				return "", err
 			}
+
+			fmt.Println("valueSizeBytes", valueSizeBytes)
 
 			if valueType != "string" {
 				return "", errors.New("value is not of type string")
 			}
 			/* if valueType == "int" {
-				value, err = decodeInt(valueSize, bitRange)
+				value, err = decodeInt(valueSizeBytes, bitRange)
 			} */
 			//if valueType == "string" { }
-			stringLength, err := getStringLength(valueSize, bitRange)
+			stringLength, err := getStringLength(valueSizeBytes, bitRange)
 
 			if err != nil {
 				fmt.Println("failed to get string length")
@@ -335,6 +338,7 @@ func GetRDBKeys(filePath string) (string, error) {
 				return "", err
 			}
 
+			fmt.Println("stringBytes, length, sizeEncodingBytes", stringBytes, stringLength, sizeEncodingBytes)
 			value = decodeString(stringBytes, stringLength, sizeEncodingBytes)
 			fmt.Println("value", value)
 		}
