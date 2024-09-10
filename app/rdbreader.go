@@ -46,7 +46,7 @@ func LoadFile(path string) error {
 	}
 
 	// TODO: check whether or not the RDB file is empty
-	bytesUntilEOF, err := reader.ReadBytes(endOfFileByte)
+	// bytesUntilEOF, err := reader.ReadBytes(endOfFileByte)
 
 	metadataSectionBytes, err := reader.ReadBytes(dbSubsectionByte)
 	if err != nil {
@@ -78,7 +78,11 @@ func LoadFile(path string) error {
 			if len(sectionBytes) == 0 {
 				break
 			}
-			value, bitRange, err := decodeNextValue(sectionBytes)
+			valueType, bitRange, _, err := decodeTypeAttrs(sectionBytes[0])
+			if err != nil {
+				return err
+			}
+			value, err := decodeNextValue(sectionBytes, valueType, bitRange)
 			if err != nil {
 				return err
 			}
@@ -132,16 +136,20 @@ func LoadFile(path string) error {
 	return nil
 }
 
-// decodeString returns the
-func decodeString(input []byte, bitRange [2]int) (string, error) {
+func getStringLength(lengthBytes []byte, bitRange [2]int) (int, error) {
 	ignoreBits, useBits := bitRange[0], bitRange[1]
-	useBytes := (ignoreBits + useBits) / 8                                 // calculate total bytes to take from input
-	binaryStringSize := bytesToBinaryString(input[:useBytes])[ignoreBits:] // take only required bits
+	useBytes := (ignoreBits + useBits) / 8                                       // calculate total bytes to take from input
+	binaryStringSize := bytesToBinaryString(lengthBytes[:useBytes])[ignoreBits:] // take only required bits
 	stringLength, err := strconv.ParseInt(binaryStringSize, 2, useBits)
 	if err != nil {
-		return "", err
+		return 0, err
 	}
-	return string(input[useBytes:][:stringLength]), nil
+	return int(stringLength), nil
+}
+
+// decodeString returns the
+func decodeString(input []byte, stringLength int, sizeEncodingBytes int) string {
+	return string(input[sizeEncodingBytes:][:stringLength])
 }
 
 func decodeInt(input []byte, bitRange [2]int) (int, error) {
@@ -164,41 +172,55 @@ func decodeInt(input []byte, bitRange [2]int) (int, error) {
 
 // decodeBytes returns the RDBType and an 2-item array with the exact bits to ignore and use.
 // If there are no matches, ti returns an empty string and [2]int{0,0}
-func decodeNextValue(inputBytes []byte) (interface{}, [2]int, error) {
-	var err error
-	var decodedValue interface{}
-	var bitRange [2]int = [2]int{0, 0}
-	startByte := inputBytes[0]
-
-	switch {
-	case startByte <= 0b00111111:
-		bitRange = [2]int{2, 6}
-		decodedValue, err = decodeString(inputBytes, bitRange) // item 1: ignore bits, item 2: transform bits, (item1 + item2) / 8: advance bits
-	case startByte <= 0b01111111:
-		bitRange = [2]int{2, 14}
-		decodedValue, err = decodeString(inputBytes, bitRange)
-	case startByte <= 0b10111111:
-		bitRange = [2]int{8, 32} // ignore 6 remaining bits of the input size
-		decodedValue, err = decodeString(inputBytes, bitRange)
-	/* case startByte <= 0b11111111:
-	return decodeString(startByte) */
-	case startByte == 0xC0:
-		bitRange = [2]int{8, 8}
+func decodeNextValue(inputBytes []byte, valueType string, bitRange [2]int) (decodedValue interface{}, err error) {
+	switch valueType {
+	case "int":
 		decodedValue, err = decodeInt(inputBytes, bitRange)
-	case startByte == 0xC1:
-		bitRange = [2]int{8, 16}
-		decodedValue, err = decodeInt(inputBytes, bitRange)
-	case startByte == 0xC2:
-		bitRange = [2]int{8, 32}
-		decodedValue, err = decodeInt(inputBytes, bitRange)
+	case "string":
+		stringLength, err := getStringLength(inputBytes, bitRange)
+		if err != nil {
+			break
+		}
+		decodedValue = decodeString(inputBytes, stringLength, (bitRange[0]+bitRange[1])/8)
 	default:
-		err = fmt.Errorf("unable to decode byte %d", startByte)
+		err = fmt.Errorf("cannot decode value of type %s", valueType)
 	}
 
 	if err != nil {
-		return decodedValue, bitRange, err
+		return nil, err
 	}
-	return decodedValue, bitRange, nil
+
+	return decodedValue, err
+}
+
+func decodeTypeAttrs(sizeByte byte) (valueType string, bitRange [2]int, sizeEncodingBytes int, err error) {
+	switch {
+	case sizeByte <= 0b00111111:
+		valueType = "string"
+		bitRange = [2]int{2, 6}
+	case sizeByte <= 0b01111111:
+		valueType = "string"
+		bitRange = [2]int{2, 14}
+	case sizeByte <= 0b10111111:
+		valueType = "string"
+		bitRange = [2]int{8, 32}
+	case sizeByte == 0xC0:
+		valueType = "int"
+		bitRange = [2]int{8, 8}
+	case sizeByte == 0xC1:
+		valueType = "int"
+		bitRange = [2]int{8, 16}
+	case sizeByte == 0xC2:
+		valueType = "int"
+		bitRange = [2]int{8, 32}
+	default:
+		valueType = ""
+		bitRange = [2]int{0, 0}
+		err = fmt.Errorf("unable to find value type for byte %v", sizeByte)
+	}
+
+	sizeEncodingBytes = (bitRange[0] + bitRange[1]) / 8
+	return
 }
 
 func bytesToBinaryString(inputBytes []byte) string {
@@ -223,7 +245,7 @@ func RDBHexStringToByte(hexString string) (byte, error) {
 	return bytes[0], nil
 }
 
-func GetRDBKeys(filePath, key string) (string, error) {
+func GetRDBKeys(filePath string) (string, error) {
 	f, err := os.Open(filePath)
 	if err != nil {
 		return "", err
@@ -232,8 +254,8 @@ func GetRDBKeys(filePath, key string) (string, error) {
 	hexReader := hex.NewDecoder(f)
 	reader := bufio.NewReader(hexReader)
 	dbSubsectionByte, _ := RDBHexStringToByte(RDB_DB_SUBSECTION_START)
-	stringKeyByte, _ := RDBHexStringToByte(RDB_STRING_KEY)
 	hashTableByte, _ := RDBHexStringToByte(RDB_HASH_TABLE_START)
+	stringKeyByte, _ := RDBHexStringToByte(RDB_STRING_KEY)
 
 	// advance until keys
 	_, err = reader.ReadBytes(dbSubsectionByte)
@@ -244,23 +266,98 @@ func GetRDBKeys(filePath, key string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	_, err = reader.Discard(4)
+	tableSizeBytes := make([]byte, 2)
+	_, err = reader.Read(tableSizeBytes)
 	if err != nil {
 		return "", err
 	}
-	_, err = reader.ReadBytes(stringKeyByte)
+	tableExpireSizeBytes := make([]byte, 2)
+	_, err = reader.Read(tableExpireSizeBytes)
 	if err != nil {
 		return "", err
 	}
+	tableSize, _ := binary.ReadUvarint(bytes.NewReader(tableSizeBytes))
+	tableExpireSize, _ := binary.ReadUvarint(bytes.NewReader(tableExpireSizeBytes))
 
-	for {
-		_, err = reader.ReadBytes(stringKeyByte)
+	fmt.Println(tableExpireSize)
+
+	for i := 0; i < int(tableSize); i++ {
+		_, err := reader.ReadBytes(stringKeyByte)
 		if err != nil {
 			return "", err
 		}
-		break
-		//n _, err := reader.Peek()
+
+		for j := 0; j < 2; i++ {
+			fmt.Println(i, j)
+			sizeBytes := make([]byte, 1)
+			_, err = reader.Read(sizeBytes)
+
+			if err != nil {
+				fmt.Println("failed to read size")
+				return "", err
+			}
+
+			valueType, bitRange, sizeEncodingBytes, err := decodeTypeAttrs(sizeBytes[0])
+
+			if err != nil {
+				fmt.Println("failed to decode type attributes for ", sizeBytes[0])
+				return "", err
+			}
+
+			var value string
+			valueSize := make([]byte, sizeEncodingBytes)
+			_, err = reader.Read(valueSize)
+
+			if err != nil {
+				fmt.Println("")
+				return "", err
+			}
+
+			if valueType != "string" {
+				return "", errors.New("value is not of type string")
+			}
+			/* if valueType == "int" {
+				value, err = decodeInt(valueSize, bitRange)
+			} */
+			//if valueType == "string" { }
+			stringLength, err := getStringLength(valueSize, bitRange)
+
+			if err != nil {
+				fmt.Println("failed to get string length")
+				return "", err
+			}
+
+			stringBytes := make([]byte, stringLength)
+			_, err = reader.Read(stringBytes)
+
+			if err != nil {
+				fmt.Println("failed to read bytes for string")
+				return "", err
+			}
+
+			value = decodeString(stringBytes, stringLength, sizeEncodingBytes)
+			fmt.Println("value", value)
+		}
+
 	}
+
+	/* 	_, err = reader.Discard(4)
+	   	if err != nil {
+	   		return "", err
+	   	}
+	   	_, err = reader.ReadBytes(stringKeyByte)
+	   	if err != nil {
+	   		return "", err
+	   	}
+
+	   	for {
+	   		_, err = reader.ReadBytes(stringKeyByte)
+	   		if err != nil {
+	   			return "", err
+	   		}
+	   		break
+	   		//n _, err := reader.Peek()
+	   	} */
 
 	return "", nil
 }

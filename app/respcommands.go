@@ -242,6 +242,8 @@ var (
 			if err != nil {
 				fmt.Println(err)
 			}
+			res, err := GetRDBKeys(filepath.Join("..", RDB_DEFAULT_DIR, RDB_DEFAULT_FILENAME))
+			fmt.Println("GET ALL KEYS:", res, err)
 			return "", nil
 		},
 	}
