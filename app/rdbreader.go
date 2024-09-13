@@ -18,6 +18,13 @@ type RDBValue interface {
 	int | string
 }
 
+type RDBTableEntry struct {
+	key        string
+	value      string
+	expiry     int
+	expiryByte byte
+}
+
 func LoadFile(path string) error {
 	f, err := os.Open(path)
 	if err != nil {
@@ -31,12 +38,7 @@ func LoadFile(path string) error {
 	fileHash := make([]byte, 8)
 	hexReader := hex.NewDecoder(f)
 	reader := bufio.NewReader(hexReader)
-	metadataByte, _ := RDBHexStringToByte(RDB_METADATA_START)
-	dbSubsectionByte, _ := RDBHexStringToByte(RDB_DB_SUBSECTION_START)
-	// hashTableByte, _ := RDBHexStringToByte(RDB_HASH_TABLE_START)
-	endOfFileByte, _ := RDBHexStringToByte(RDB_END_OF_FILE)
-
-	magicStringBytes, err := reader.ReadBytes(metadataByte)
+	magicStringBytes, err := reader.ReadBytes(RDB_METADATA_START_BYTE)
 	if err != nil {
 		if err == io.EOF {
 			fmt.Println("EOF here", magicStringBytes)
@@ -46,9 +48,9 @@ func LoadFile(path string) error {
 	}
 
 	// TODO: check whether or not the RDB file is empty
-	// bytesUntilEOF, err := reader.ReadBytes(endOfFileByte)
+	// bytesUntilEOF, err := reader.ReadBytes(RDB_END_OF_FILE_BYTE)
 
-	metadataSectionBytes, err := reader.ReadBytes(dbSubsectionByte)
+	metadataSectionBytes, err := reader.ReadBytes(RDB_DB_SUBSECTION_START_BYTE)
 	if err != nil {
 		return err
 	}
@@ -60,7 +62,7 @@ func LoadFile(path string) error {
 	metadataReader := bufio.NewReader(bytes.NewReader(metadataSectionBytes))
 
 	for {
-		sectionBytes, err := metadataReader.ReadBytes(metadataByte)
+		sectionBytes, err := metadataReader.ReadBytes(RDB_METADATA_START_BYTE)
 		if err != nil {
 			if err != io.EOF {
 				return fmt.Errorf("error reading metadata: %v", err)
@@ -118,7 +120,7 @@ func LoadFile(path string) error {
 	}
 	// empty rdb file
 	if dbIndex[0] == 0xC0 {
-		_, err := reader.ReadBytes(endOfFileByte)
+		_, err := reader.ReadBytes(RDB_END_OF_FILE_BYTE)
 		if err != nil {
 			return err
 		}
@@ -139,7 +141,7 @@ func LoadFile(path string) error {
 func getStringLength(lengthBytes []byte, bitRange [2]int) (int, error) {
 	ignoreBits, useBits := bitRange[0], bitRange[1]
 	useBytes := (ignoreBits + useBits) / 8 // calculate total bytes to take from input
-	fmt.Println("ignoreBits, usebITS", ignoreBits, useBits)
+	// fmt.Println("ignoreBits, usebITS", ignoreBits, useBits)
 	binaryStringSize := bytesToBinaryString(lengthBytes[:useBytes])[ignoreBits:] // take only required bits
 	stringLength, err := strconv.ParseInt(binaryStringSize, 2, NextPowerOfTwo(useBits))
 	if err != nil {
@@ -246,112 +248,165 @@ func RDBHexStringToByte(hexString string) (byte, error) {
 	return bytes[0], nil
 }
 
-func GetRDBKeys(filePath string) (string, error) {
+func GetRDBKeys(filePath string) ([]RDBTableEntry, error) {
 	f, err := os.Open(filePath)
+
 	if err != nil {
-		return "", err
+		return []RDBTableEntry{}, err
 	}
+
+	defer func() {
+		f.Close()
+	}()
 
 	hexReader := hex.NewDecoder(f)
 	reader := bufio.NewReader(hexReader)
-	dbSubsectionByte, _ := RDBHexStringToByte(RDB_DB_SUBSECTION_START)
-	hashTableByte, _ := RDBHexStringToByte(RDB_HASH_TABLE_START)
-	stringKeyByte, _ := RDBHexStringToByte(RDB_STRING_KEY)
 
 	// advance until keys
-	_, err = reader.ReadBytes(dbSubsectionByte)
+	/* 	_, err = reader.ReadBytes(RDB_DB_SUBSECTION_START_BYTE)
+	   	if err != nil {
+	   		return []RDBTableEntry{},err
+	   	} */
+	_, err = reader.ReadBytes(RDB_HASH_TABLE_START_BYTE)
 	if err != nil {
-		return "", err
-	}
-	_, err = reader.ReadBytes(hashTableByte)
-	if err != nil {
-		return "", err
+		return []RDBTableEntry{}, err
 	}
 	tableSizeBytes := make([]byte, 1)
 	_, err = reader.Read(tableSizeBytes)
 	if err != nil {
-		return "", err
+		return []RDBTableEntry{}, err
 	}
 	tableExpireSizeBytes := make([]byte, 1)
 	_, err = reader.Read(tableExpireSizeBytes)
 	if err != nil {
-		return "", err
+		return []RDBTableEntry{}, err
 	}
 	tableSize, _ := binary.ReadUvarint(bytes.NewReader(tableSizeBytes))
 	tableExpireSize, _ := binary.ReadUvarint(bytes.NewReader(tableExpireSizeBytes))
 
-	fmt.Println("tableSize, expireSize", tableSize, tableExpireSize)
+	// fmt.Println("tableSize, expireSize", tableSize, tableExpireSize)
+	tableEntriesExp := []RDBTableEntry{}
+	tableEntriesNoExp := []RDBTableEntry{}
 
-	for i := 0; i < int(tableSize); i++ {
-		_, err := reader.ReadBytes(stringKeyByte)
+	fmt.Println(RDB_TIMESTAMP_SECONDS_BYTE, RDB_TIMESTAMP_MILLIS_BYTE)
+
+	for {
+		// var buffer bytes.Buffer
+		buf := make([]byte, 1)
+		n, err := reader.Read(buf)
+		fmt.Println("encoded byte read", hex.EncodeToString(buf))
+		if n > 0 {
+			b := buf[0]
+			// buffer.Write(buf)
+			if b == RDB_TIMESTAMP_SECONDS_BYTE {
+				timeStampLength := 4
+				timeStampBytes := make([]byte, timeStampLength)
+				binary.Read(reader, binary.LittleEndian, timeStampBytes)
+				timeStamp, _ := binary.ReadUvarint(bytes.NewReader(timeStampBytes))
+				fmt.Println("timeStamp s", timeStamp)
+				keyValue, err := getTableKeyAndValue(reader)
+				if err != nil {
+					fmt.Println("Error getting key and value for entry with expiry s")
+					break
+				}
+				tableEntriesExp = append(tableEntriesExp, RDBTableEntry{keyValue[0], keyValue[1], int(timeStamp), RDB_TIMESTAMP_SECONDS_BYTE})
+			}
+			if b == RDB_TIMESTAMP_MILLIS_BYTE {
+				timeStampLength := 8
+				timeStampBytes := make([]byte, timeStampLength)
+				binary.Read(reader, binary.LittleEndian, timeStampBytes)
+				timeStamp, _ := binary.ReadUvarint(bytes.NewReader(timeStampBytes))
+				fmt.Println("timeStamp ms", timeStamp)
+				keyValue, err := getTableKeyAndValue(reader)
+				if err != nil {
+					fmt.Println("Error getting key and value for entry with expiry ms")
+					break
+				}
+				tableEntriesExp = append(tableEntriesExp, RDBTableEntry{keyValue[0], keyValue[1], int(timeStamp), RDB_TIMESTAMP_MILLIS_BYTE})
+
+			}
+			if b == RDB_STRING_KEY_BYTE {
+				fmt.Println("processing string entry")
+				reader.UnreadByte() // go back one byte
+				keyValue, err := getTableKeyAndValue(reader)
+				if err != nil {
+					fmt.Println("Error getting key and value for entry without expiry")
+					break
+				}
+				tableEntriesNoExp = append(tableEntriesExp, RDBTableEntry{keyValue[0], keyValue[1], 0, 0})
+			}
+		}
+
+		currentTableSize := len(tableEntriesExp) + len(tableEntriesNoExp)
+		if len(tableEntriesExp) == int(tableExpireSize) && currentTableSize == int(tableSize) {
+			fmt.Println("Finished reading for keys and values")
+			break
+		}
+
 		if err != nil {
-			return "", err
+			if err == io.EOF {
+				fmt.Println("Reached EOF reading keys and values")
+			}
+			fmt.Println("Error reading keys with ms expire")
+			return []RDBTableEntry{}, io.EOF
+		}
+	}
+
+	return slices.Concat(tableEntriesExp, tableEntriesNoExp), nil
+}
+
+// receives a reader at most one byte before the key type byte
+func getTableKeyAndValue(r *bufio.Reader) ([2]string, error) {
+	var keyValue []string
+	_, err := r.ReadBytes(RDB_STRING_KEY_BYTE)
+	if err != nil {
+		return [2]string{}, err
+	}
+
+	for j := 0; j < 2; j++ {
+
+		sizeBytes := make([]byte, 1)
+		_, err = r.Read(sizeBytes)
+		if err != nil {
+			fmt.Println("failed to read size")
+			return [2]string{}, err
 		}
 
-		for j := 0; j < 2; j++ {
-			fmt.Println(i, j)
-			sizeBytes := make([]byte, 1)
-			_, err = reader.Read(sizeBytes)
-
-			if err != nil {
-				fmt.Println("failed to read size")
-				return "", err
-			}
-
-			fmt.Println("sizeBytes", sizeBytes)
-			valueType, bitRange, sizeEncodingBytes, err := decodeTypeAttrs(sizeBytes[0])
-			if err != nil {
-				fmt.Println("failed to decode type attributes for ", sizeBytes[0])
-				return "", err
-			}
-			if valueType != "string" {
-				return "", errors.New("value is not of type string")
-			}
-
-			fmt.Println("attrs", valueType, bitRange, sizeEncodingBytes)
-			var value string
-			/* if valueType == "int" {
-				value, err = decodeInt(valueSizeBytes, bitRange)
-			} */
-			//if valueType == "string" { }
-			stringLength, err := getStringLength(sizeBytes, bitRange)
-			if err != nil {
-				fmt.Println("failed to get string length")
-				return "", err
-			}
-
-			stringBytes := make([]byte, stringLength)
-			_, err = reader.Read(stringBytes)
-
-			if err != nil {
-				fmt.Println("failed to read bytes for string")
-				return "", err
-			}
-
-			fmt.Println("stringBytes, length, sizeEncodingBytes", len(stringBytes), stringLength, sizeEncodingBytes)
-			value = decodeString(stringBytes, stringLength, 0)
-			fmt.Println("value", value)
+		// fmt.Println("sizeBytes", sizeBytes)
+		valueType, bitRange, sizeEncodingBytes, err := decodeTypeAttrs(sizeBytes[0])
+		if err != nil {
+			fmt.Println("failed to decode type attributes for ", sizeBytes[0])
+			return [2]string{}, err
 		}
+		if valueType != "string" {
+			return [2]string{}, errors.New("value is not of type string")
+		}
+
+		fmt.Println("attrs", valueType, bitRange, sizeEncodingBytes)
+		var value string
+		/* if valueType == "int" {
+			value, err = decodeInt(valueSizeBytes, bitRange)
+		} */
+		//if valueType == "string" { }
+		stringLength, err := getStringLength(sizeBytes, bitRange)
+		if err != nil {
+			fmt.Println("failed to get string length")
+			return [2]string{}, err
+		}
+
+		stringBytes := make([]byte, stringLength)
+		_, err = r.Read(stringBytes)
+		if err != nil {
+			fmt.Println("failed to read bytes for string")
+			return [2]string{}, err
+		}
+
+		fmt.Println("stringBytes, length, sizeEncodingBytes", len(stringBytes), stringLength, sizeEncodingBytes)
+		value = decodeString(stringBytes, stringLength, 0)
+		keyValue = append(keyValue, value)
 
 	}
 
-	/* 	_, err = reader.Discard(4)
-	   	if err != nil {
-	   		return "", err
-	   	}
-	   	_, err = reader.ReadBytes(stringKeyByte)
-	   	if err != nil {
-	   		return "", err
-	   	}
-
-	   	for {
-	   		_, err = reader.ReadBytes(stringKeyByte)
-	   		if err != nil {
-	   			return "", err
-	   		}
-	   		break
-	   		//n _, err := reader.Peek()
-	   	} */
-
-	return "", nil
+	fmt.Println("keyValue", keyValue)
+	return [2]string{keyValue[0], keyValue[1]}, nil
 }
