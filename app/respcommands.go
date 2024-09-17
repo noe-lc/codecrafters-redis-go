@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"path/filepath"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -108,22 +107,35 @@ var (
 	Get = RespCommand{
 		argLen: 2,
 		Execute: func(args []string, server RedisServer) (string, error) {
-			memItem, exists := Memory[args[0]]
-			if !exists {
-				fmt.Printf("key %s does not exist\n", args[0])
-				return NULL_BULK_STRING, nil
+			key := args[0]
+			memItem, exists := Memory[key]
+
+			if exists {
+				value, err := memItem.GetValue()
+				if err != nil {
+					if err == ErrExpiredKey {
+						return NULL_BULK_STRING, nil
+					}
+					fmt.Printf("Failed to get key %s: %v\n", key, err)
+					return "", err
+				}
+
+				return ToRespBulkString(value), nil
 			}
 
-			value, err := memItem.GetValue()
+			filePath := GetRDBFilePath(server)
+			dbEntries, err := GetRDBEntries(filePath)
 			if err != nil {
-				if err == ErrExpiredKey {
-					return NULL_BULK_STRING, nil
-				}
-				fmt.Printf("Failed to get key %s: %v\n", args[0], err)
 				return "", err
 			}
+			for _, entry := range dbEntries {
+				if key == entry.key {
+					return ToRespBulkString(entry.value), nil
+				}
+			}
 
-			return ToRespBulkString(value), nil
+			return NULL_BULK_STRING, nil
+
 		},
 	}
 	Info = RespCommand{
@@ -241,8 +253,7 @@ var (
 	Keys = RespCommand{
 		Execute: func(args []string, rs RedisServer) (string, error) {
 			pattern := args[0]
-			rdbConfig := rs.GetRDBConfig()
-			filePath := filepath.Join(rdbConfig[RDB_DIR_ARG], rdbConfig[RDB_FILENAME_ARG])
+			filePath := GetRDBFilePath(rs)
 
 			switch pattern {
 			case "*":

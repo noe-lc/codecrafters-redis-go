@@ -148,7 +148,7 @@ func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn) err
 		}
 
 		if respCommand.Type == WRITE {
-			go r.propagateCommand(commandInput /* modHistoryEntry */)
+			r.propagateCommand(commandInput)
 		}
 	}
 

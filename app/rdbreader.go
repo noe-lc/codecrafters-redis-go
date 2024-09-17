@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -246,6 +247,12 @@ func RDBHexStringToByte(hexString string) (byte, error) {
 	}
 
 	return bytes[0], nil
+}
+
+func GetRDBFilePath(r RedisServer) string {
+	rdbConfig := r.GetRDBConfig()
+	filePath := filepath.Join(rdbConfig[RDB_DIR_ARG], rdbConfig[RDB_FILENAME_ARG])
+	return filePath
 }
 
 func GetRDBEntries(filePath string) ([]RDBTableEntry, error) {
