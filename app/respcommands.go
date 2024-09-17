@@ -99,8 +99,15 @@ var (
 			if exists {
 				expiry = expArgs[0]
 			}
-
-			Memory[key] = *NewMemoryItem(value, expiry)
+			expiresInMs, err := strconv.Atoi(expiry)
+			if err != nil {
+				return "", err
+			}
+			itemExpires := int64(0)
+			if expiresInMs != 0 {
+				itemExpires = time.Now().UnixMilli() + int64(expiresInMs)
+			}
+			Memory[key] = *NewMemoryItem(value, itemExpires)
 			return ToRespSimpleString("OK"), nil
 		},
 	}
@@ -128,10 +135,28 @@ var (
 			if err != nil {
 				return "", err
 			}
+
 			for _, entry := range dbEntries {
-				if key == entry.key {
-					return ToRespBulkString(entry.value), nil
+				if key != entry.key {
+					continue
 				}
+
+				expires := int64(0)
+				if entry.expiry != 0 {
+					expires = entry.expiry
+				}
+				memItem := NewMemoryItem(entry.value, expires)
+				fmt.Println(key, memItem)
+				// Memory[key] = *memItem
+				value, err := memItem.GetValue()
+				if err != nil {
+					if err == ErrExpiredKey {
+						return NULL_BULK_STRING, nil
+					}
+					return "", err
+				}
+
+				return ToRespBulkString(value), nil
 			}
 
 			return NULL_BULK_STRING, nil

@@ -20,10 +20,9 @@ type RDBValue interface {
 }
 
 type RDBTableEntry struct {
-	key        string
-	value      string
-	expiry     int
-	expiryByte byte
+	key    string
+	value  string
+	expiry int64
 }
 
 func LoadFile(path string) error {
@@ -303,7 +302,7 @@ func GetRDBEntries(filePath string) ([]RDBTableEntry, error) {
 		buf := make([]byte, 1)
 		n, err := reader.Read(buf)
 		if n > 0 {
-			var timeStamp uint64
+			var timeStamp int64
 			b := buf[0]
 			if b == RDB_TIMESTAMP_SECONDS_BYTE {
 				timeStampBytes := make([]byte, RDB_TIMESTAMP_SECONDS_BYTE_LENGTH)
@@ -316,13 +315,12 @@ func GetRDBEntries(filePath string) ([]RDBTableEntry, error) {
 				if err != nil {
 					return []RDBTableEntry{}, err
 				}
-				fmt.Println("timeStamp s", timeStamp)
 				keyValue, err := getTableKeyAndValue(reader)
 				if err != nil {
 					fmt.Println("Error getting key and value for entry with expiry s")
 					break
 				}
-				tableEntriesExp = append(tableEntriesExp, RDBTableEntry{keyValue[0], keyValue[1], int(timeStamp), RDB_TIMESTAMP_SECONDS_BYTE})
+				tableEntriesExp = append(tableEntriesExp, RDBTableEntry{keyValue[0], keyValue[1], timeStamp * 1000})
 			}
 			if b == RDB_TIMESTAMP_MILLIS_BYTE {
 				timeStampBytes := make([]byte, RDB_TIMESTAMP_MILLIS_BYTE_LENGTH)
@@ -335,24 +333,22 @@ func GetRDBEntries(filePath string) ([]RDBTableEntry, error) {
 				if err != nil {
 					return []RDBTableEntry{}, err
 				}
-				fmt.Println("timeStamp ms", timeStamp)
 				keyValue, err := getTableKeyAndValue(reader)
 				if err != nil {
 					fmt.Println("Error getting key and value for entry with expiry ms")
 					break
 				}
-				tableEntriesExp = append(tableEntriesExp, RDBTableEntry{keyValue[0], keyValue[1], int(timeStamp), RDB_TIMESTAMP_MILLIS_BYTE})
+				tableEntriesExp = append(tableEntriesExp, RDBTableEntry{keyValue[0], keyValue[1], timeStamp})
 
 			}
 			if b == RDB_STRING_KEY_BYTE {
-				fmt.Println("processing string entry")
 				reader.UnreadByte() // go back one byte
 				keyValue, err := getTableKeyAndValue(reader)
 				if err != nil {
 					fmt.Println("Error getting key and value for entry without expiry")
 					break
 				}
-				tableEntriesNoExp = append(tableEntriesNoExp, RDBTableEntry{keyValue[0], keyValue[1], 0, 0})
+				tableEntriesNoExp = append(tableEntriesNoExp, RDBTableEntry{keyValue[0], keyValue[1], 0})
 			}
 		}
 
@@ -403,7 +399,6 @@ func getTableKeyAndValue(r *bufio.Reader) ([2]string, error) {
 			return [2]string{}, errors.New("value is not of type string")
 		}
 
-		fmt.Println("attrs", valueType, bitRange, sizeEncodingBytes)
 		var value string
 		/* if valueType == "int" {
 			value, err = decodeInt(valueSizeBytes, bitRange)

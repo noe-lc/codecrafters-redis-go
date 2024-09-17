@@ -13,23 +13,21 @@ var Memory = map[string]MemoryItem{}
 
 type MemoryItem struct {
 	value   string
-	created time.Time
-	expires time.Duration
+	expires int64
 }
 
-func NewMemoryItem(value string, expires string) *MemoryItem {
-	exp, _ := time.ParseDuration(expires + "ms")
+func NewMemoryItem(value string, expires int64) *MemoryItem {
 	return &MemoryItem{
 		value:   value,
-		created: time.Now(),
-		expires: exp,
+		expires: expires,
 	}
 }
 
 func (c *MemoryItem) GetValue() (string, error) {
-	expires := c.created.Add(c.expires)
-
-	if c.expires.Milliseconds() != 0 && time.Since(expires).Milliseconds() > 0 {
+	if c.expires == -1 {
+		return c.value, nil
+	}
+	if c.expires != 0 && time.Now().UnixMilli() > c.expires {
 		return "", ErrExpiredKey
 	}
 
