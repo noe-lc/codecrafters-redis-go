@@ -294,13 +294,14 @@ func GetRDBEntries(filePath string) ([]RDBTableEntry, error) {
 	tableEntriesExp := []RDBTableEntry{}
 	tableEntriesNoExp := []RDBTableEntry{}
 
-	fmt.Println(RDB_TIMESTAMP_SECONDS_BYTE, RDB_TIMESTAMP_MILLIS_BYTE)
+	fmt.Println("Table sizes")
+	fmt.Println("size: ", tableSize)
+	fmt.Println("expire size: ", tableExpireSize)
 
 	for {
 		// var buffer bytes.Buffer
 		buf := make([]byte, 1)
 		n, err := reader.Read(buf)
-		fmt.Println("encoded byte read", hex.EncodeToString(buf))
 		if n > 0 {
 			var timeStamp uint64
 			b := buf[0]
@@ -311,7 +312,6 @@ func GetRDBEntries(filePath string) ([]RDBTableEntry, error) {
 					return []RDBTableEntry{}, err
 				}
 				buf := bytes.NewReader(timeStampBytes)
-				fmt.Println("ts:", timeStampBytes)
 				err = binary.Read(buf, binary.LittleEndian, &timeStamp)
 				if err != nil {
 					return []RDBTableEntry{}, err
@@ -331,7 +331,6 @@ func GetRDBEntries(filePath string) ([]RDBTableEntry, error) {
 					return []RDBTableEntry{}, err
 				}
 				buf := bytes.NewReader(timeStampBytes)
-				fmt.Println("ts:", timeStampBytes)
 				err = binary.Read(buf, binary.LittleEndian, &timeStamp)
 				if err != nil {
 					return []RDBTableEntry{}, err
@@ -353,11 +352,12 @@ func GetRDBEntries(filePath string) ([]RDBTableEntry, error) {
 					fmt.Println("Error getting key and value for entry without expiry")
 					break
 				}
-				tableEntriesNoExp = append(tableEntriesExp, RDBTableEntry{keyValue[0], keyValue[1], 0, 0})
+				tableEntriesNoExp = append(tableEntriesNoExp, RDBTableEntry{keyValue[0], keyValue[1], 0, 0})
 			}
 		}
 
 		currentTableSize := len(tableEntriesExp) + len(tableEntriesNoExp)
+		fmt.Println("current table size:", currentTableSize)
 		if len(tableEntriesExp) == int(tableExpireSize) && currentTableSize == int(tableSize) {
 			fmt.Println("Finished reading for keys and values")
 			break
@@ -366,9 +366,11 @@ func GetRDBEntries(filePath string) ([]RDBTableEntry, error) {
 		if err != nil {
 			if err == io.EOF {
 				fmt.Println("Reached EOF reading keys and values")
+				return slices.Concat(tableEntriesExp, tableEntriesNoExp), nil
 			}
+
 			fmt.Println("Error reading keys with ms expire")
-			return []RDBTableEntry{}, io.EOF
+			return []RDBTableEntry{}, err
 		}
 	}
 

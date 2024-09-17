@@ -128,19 +128,6 @@ func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn) err
 		if err != nil {
 			return err
 		}
-
-		/* indexOfPortArg := slices.Index(args, LISTENING_PORT_ARG)
-		indexOfPort := indexOfPortArg + 1
-		if indexOfPortArg == -1 || len(args) <= indexOfPort {
-			break
-		}
-		replicaPort := args[indexOfPort]
-		conn, err := net.Dial("tcp", DEFAULT_HOST_ADDRESS+":"+replicaPort)
-		if err != nil {
-			fmt.Printf("Could not connect to replica on port %s\n", replicaPort)
-			return err
-		}
-		r.replicaConnections = append(r.replicaConnections, conn) */
 	default:
 		err := writeCommandOutput()
 		if err != nil {
