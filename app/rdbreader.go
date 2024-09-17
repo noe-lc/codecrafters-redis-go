@@ -296,13 +296,20 @@ func GetRDBKeys(filePath string) ([]RDBTableEntry, error) {
 		n, err := reader.Read(buf)
 		fmt.Println("encoded byte read", hex.EncodeToString(buf))
 		if n > 0 {
+			var timeStamp uint64
 			b := buf[0]
-			// buffer.Write(buf)
 			if b == RDB_TIMESTAMP_SECONDS_BYTE {
-				timeStampLength := 4
-				timeStampBytes := make([]byte, timeStampLength)
-				binary.Read(reader, binary.LittleEndian, timeStampBytes)
-				timeStamp, _ := binary.ReadUvarint(bytes.NewReader(timeStampBytes))
+				timeStampBytes := make([]byte, RDB_TIMESTAMP_SECONDS_BYTE_LENGTH)
+				_, err := reader.Read(timeStampBytes)
+				if err != nil {
+					return []RDBTableEntry{}, err
+				}
+				buf := bytes.NewReader(timeStampBytes)
+				fmt.Println("ts:", timeStampBytes)
+				err = binary.Read(buf, binary.LittleEndian, &timeStamp)
+				if err != nil {
+					return []RDBTableEntry{}, err
+				}
 				fmt.Println("timeStamp s", timeStamp)
 				keyValue, err := getTableKeyAndValue(reader)
 				if err != nil {
@@ -312,10 +319,17 @@ func GetRDBKeys(filePath string) ([]RDBTableEntry, error) {
 				tableEntriesExp = append(tableEntriesExp, RDBTableEntry{keyValue[0], keyValue[1], int(timeStamp), RDB_TIMESTAMP_SECONDS_BYTE})
 			}
 			if b == RDB_TIMESTAMP_MILLIS_BYTE {
-				timeStampLength := 8
-				timeStampBytes := make([]byte, timeStampLength)
-				binary.Read(reader, binary.LittleEndian, timeStampBytes)
-				timeStamp, _ := binary.ReadUvarint(bytes.NewReader(timeStampBytes))
+				timeStampBytes := make([]byte, RDB_TIMESTAMP_MILLIS_BYTE_LENGTH)
+				_, err := reader.Read(timeStampBytes)
+				if err != nil {
+					return []RDBTableEntry{}, err
+				}
+				buf := bytes.NewReader(timeStampBytes)
+				fmt.Println("ts:", timeStampBytes)
+				err = binary.Read(buf, binary.LittleEndian, &timeStamp)
+				if err != nil {
+					return []RDBTableEntry{}, err
+				}
 				fmt.Println("timeStamp ms", timeStamp)
 				keyValue, err := getTableKeyAndValue(reader)
 				if err != nil {
@@ -364,7 +378,6 @@ func getTableKeyAndValue(r *bufio.Reader) ([2]string, error) {
 	}
 
 	for j := 0; j < 2; j++ {
-
 		sizeBytes := make([]byte, 1)
 		_, err = r.Read(sizeBytes)
 		if err != nil {
