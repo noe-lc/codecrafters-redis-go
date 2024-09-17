@@ -248,7 +248,7 @@ func RDBHexStringToByte(hexString string) (byte, error) {
 	return bytes[0], nil
 }
 
-func GetRDBKeys(filePath string) ([]RDBTableEntry, error) {
+func GetRDBEntries(filePath string) ([]RDBTableEntry, error) {
 	f, err := os.Open(filePath)
 
 	if err != nil {

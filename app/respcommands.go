@@ -22,6 +22,7 @@ const (
 	PSYNC    = "PSYNC"
 	WAIT     = "WAIT"
 	CONFIG   = "CONFIG"
+	KEYS     = "KEYS"
 )
 
 // Command types
@@ -236,30 +237,44 @@ var (
 			return "", nil
 		},
 	}
-	TestKey = RespCommand{
-		Execute: func(s []string, rs RedisServer) (string, error) {
-			err := LoadFile(filepath.Join("..", RDB_DEFAULT_DIR, RDB_DEFAULT_FILENAME))
+	Keys = RespCommand{
+		Execute: func(args []string, rs RedisServer) (string, error) {
+			pattern := args[0]
+			rdbConfig := rs.GetRDBConfig()
+			filePath := filepath.Join(rdbConfig[RDB_DIR_ARG], rdbConfig[RDB_FILENAME_ARG])
+			entries, err := GetRDBEntries(filePath)
 			if err != nil {
-				fmt.Println(err)
+				return "", err
 			}
-			res, err := GetRDBKeys(filepath.Join("..", RDB_DEFAULT_DIR, RDB_DEFAULT_FILENAME))
-			fmt.Println("GET ALL KEYS:", res, err)
-			return "", nil
+
+			switch pattern {
+			case "*":
+				keys := []string{}
+				for _, entry := range entries {
+					keys = append(keys, entry.key)
+				}
+
+				fmt.Println("keys:", keys)
+				return ToRespArrayString(keys...), nil
+			default:
+				return ToRespArrayString(""), nil
+			}
+
 		},
 	}
 )
 
 var RespCommands = map[string]RespCommand{
-	PING:      Ping,
-	ECHO:      Echo,
-	GET:       Get,
-	SET:       Set,
-	INFO:      Info,
-	REPLCONF:  ReplConf,
-	PSYNC:     Psync,
-	WAIT:      Wait,
-	CONFIG:    Config,
-	"TESTKEY": TestKey,
+	PING:     Ping,
+	ECHO:     Echo,
+	GET:      Get,
+	SET:      Set,
+	INFO:     Info,
+	REPLCONF: ReplConf,
+	PSYNC:    Psync,
+	WAIT:     Wait,
+	CONFIG:   Config,
+	KEYS:     Keys,
 }
 
 var CommandFlags = map[string]string{
