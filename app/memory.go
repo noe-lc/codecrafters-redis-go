@@ -5,8 +5,8 @@ import (
 	"time"
 )
 
-const (
-	EXPIRED_KEY = "expired key"
+var (
+	ErrExpiredKey = errors.New("expired key")
 )
 
 var Memory = map[string]MemoryItem{}
@@ -30,7 +30,7 @@ func (c *MemoryItem) GetValue() (string, error) {
 	expires := c.created.Add(c.expires)
 
 	if c.expires.Milliseconds() != 0 && time.Since(expires).Milliseconds() > 0 {
-		return "", errors.New(EXPIRED_KEY)
+		return "", ErrExpiredKey
 	}
 
 	return c.value, nil

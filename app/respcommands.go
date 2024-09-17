@@ -109,17 +109,18 @@ var (
 		argLen: 2,
 		Execute: func(args []string, server RedisServer) (string, error) {
 			memItem, exists := Memory[args[0]]
-
 			if !exists {
 				fmt.Printf("key %s does not exist\n", args[0])
 				return NULL_BULK_STRING, nil
 			}
 
 			value, err := memItem.GetValue()
-
 			if err != nil {
+				if err == ErrExpiredKey {
+					return NULL_BULK_STRING, nil
+				}
 				fmt.Printf("Failed to get key %s: %v\n", args[0], err)
-				return NULL_BULK_STRING, err
+				return "", err
 			}
 
 			return ToRespBulkString(value), nil
@@ -242,13 +243,28 @@ var (
 			pattern := args[0]
 			rdbConfig := rs.GetRDBConfig()
 			filePath := filepath.Join(rdbConfig[RDB_DIR_ARG], rdbConfig[RDB_FILENAME_ARG])
-			entries, err := GetRDBEntries(filePath)
-			if err != nil {
-				return "", err
-			}
 
 			switch pattern {
 			case "*":
+				/* 				f, _ := os.OpenFile(filePath, os.O_RDONLY, 0644)
+				   				d, _ := io.ReadAll(f)
+				   				f, _ = os.OpenFile(filePath, os.O_RDONLY, 0644)
+				   				b := []byte{}
+				   				for {
+				   					buf := make([]byte, 1)
+				   					r, err := f.Read(buf)
+				   					if err != nil {
+				   						fmt.Println("decode err", err, r)
+				   						break
+				   					}
+				   					b = append(b, buf[0])
+				   				}
+				   				fmt.Println("data:", b)
+				   				fmt.Println("string data", hex.EncodeToString(d)) */
+				entries, err := GetRDBEntries(filePath)
+				if err != nil {
+					return "", err
+				}
 				keys := []string{}
 				for _, entry := range entries {
 					keys = append(keys, entry.key)

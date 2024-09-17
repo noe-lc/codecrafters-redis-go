@@ -259,8 +259,7 @@ func GetRDBEntries(filePath string) ([]RDBTableEntry, error) {
 		f.Close()
 	}()
 
-	hexReader := hex.NewDecoder(f)
-	reader := bufio.NewReader(hexReader)
+	reader := bufio.NewReader(f)
 
 	// advance until keys
 	/* 	_, err = reader.ReadBytes(RDB_DB_SUBSECTION_START_BYTE)
