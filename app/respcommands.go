@@ -25,6 +25,7 @@ const (
 	CONFIG   = "CONFIG"
 	KEYS     = "KEYS"
 	TYPE     = "TYPE"
+	XADD     = "XADD"
 )
 
 // Command types
@@ -158,8 +159,6 @@ var (
 					expires = entry.expiry
 				}
 				memItem := NewMemoryItem(entry.value, expires)
-				fmt.Println(key, memItem)
-				// Memory[key] = *memItem
 				value, err := memItem.GetValue()
 				if err != nil {
 					if err == ErrExpiredKey {
@@ -336,13 +335,24 @@ var (
 			if value == NULL_BULK_STRING {
 				return ToRespSimpleString(EMPTY_KEY_TYPE), nil
 			}
-
-			/* switch value.(type) {
-			case condition:
-
-			} */
-
 			return ToRespSimpleString("string"), nil
+		},
+	}
+	XAdd = RespCommand{
+		Execute: func(args []string, rs RedisServer) (string, error) {
+			concatArgs := strings.Join(args, " ")
+			simpleStreamRegExp := `(\w+){1} [-0-9]+ (\w+ )+\w+$`
+			isSimpleStream, _ := regexp.MatchString(simpleStreamRegExp, concatArgs)
+
+			switch {
+			case isSimpleStream:
+				key, id := args[0], args[1]
+				return ToRespArrayString(""), nil
+			default:
+				return ToRespArrayString(""), nil
+			}
+
+			return "", nil
 		},
 	}
 )
@@ -359,6 +369,7 @@ var RespCommands = map[string]RespCommand{
 	CONFIG:   Config,
 	KEYS:     Keys,
 	TYPE:     Type,
+	XADD:     XAdd,
 }
 
 var CommandFlags = map[string]string{
