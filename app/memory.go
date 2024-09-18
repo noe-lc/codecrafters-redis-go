@@ -24,9 +24,6 @@ func NewMemoryItem(value string, expires int64) *MemoryItem {
 }
 
 func (c *MemoryItem) GetValue() (string, error) {
-	if c.expires == -1 {
-		return c.value, nil
-	}
 	if c.expires != 0 && time.Now().UnixMilli() > c.expires {
 		return "", ErrExpiredKey
 	}

@@ -3,6 +3,8 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -22,6 +24,7 @@ const (
 	WAIT     = "WAIT"
 	CONFIG   = "CONFIG"
 	KEYS     = "KEYS"
+	TYPE     = "TYPE"
 )
 
 // Command types
@@ -131,8 +134,17 @@ var (
 			}
 
 			filePath := GetRDBFilePath(server)
+			if _, err := os.Stat(filePath); errors.Is(err, os.ErrNotExist) {
+				return NULL_BULK_STRING, nil
+			} else if err != nil {
+				return "", err
+			}
+
 			dbEntries, err := GetRDBEntries(filePath)
 			if err != nil {
+				if err == io.EOF {
+					return NULL_BULK_STRING, nil
+				}
 				return "", err
 			}
 
@@ -314,6 +326,25 @@ var (
 
 		},
 	}
+	Type = RespCommand{
+		Execute: func(args []string, rs RedisServer) (string, error) {
+			key := args[0]
+			value, err := Get.Execute([]string{key}, rs)
+			if err != nil {
+				return "", err
+			}
+			if value == NULL_BULK_STRING {
+				return ToRespSimpleString(EMPTY_KEY_TYPE), nil
+			}
+
+			/* switch value.(type) {
+			case condition:
+
+			} */
+
+			return ToRespSimpleString("string"), nil
+		},
+	}
 )
 
 var RespCommands = map[string]RespCommand{
@@ -327,6 +358,7 @@ var RespCommands = map[string]RespCommand{
 	WAIT:     Wait,
 	CONFIG:   Config,
 	KEYS:     Keys,
+	TYPE:     Type,
 }
 
 var CommandFlags = map[string]string{
