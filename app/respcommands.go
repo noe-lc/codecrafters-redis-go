@@ -298,21 +298,6 @@ var (
 
 			switch pattern {
 			case "*":
-				/* 				f, _ := os.OpenFile(filePath, os.O_RDONLY, 0644)
-				   				d, _ := io.ReadAll(f)
-				   				f, _ = os.OpenFile(filePath, os.O_RDONLY, 0644)
-				   				b := []byte{}
-				   				for {
-				   					buf := make([]byte, 1)
-				   					r, err := f.Read(buf)
-				   					if err != nil {
-				   						fmt.Println("decode err", err, r)
-				   						break
-				   					}
-				   					b = append(b, buf[0])
-				   				}
-				   				fmt.Println("data:", b)
-				   				fmt.Println("string data", hex.EncodeToString(d)) */
 				entries, err := GetRDBEntries(filePath)
 				if err != nil {
 					return "", err
@@ -333,14 +318,24 @@ var (
 	Type = RespCommand{
 		Execute: func(args []string, rs RedisServer) (string, error) {
 			key := args[0]
-			value, err := Get.Execute([]string{key}, rs)
+			memItem, exists := Memory[key]
+			if !exists {
+				return ToRespSimpleString(EMPTY_KEY_TYPE), nil
+			}
+			_, err := memItem.GetValue()
+			if err != nil {
+				if err == ErrExpiredKey {
+					return NULL_BULK_STRING, nil
+				} else {
+					fmt.Printf("Failed to get key %s: %v\n", key, err)
+					return "", err
+				}
+			}
+			valueType, err := memItem.Type()
 			if err != nil {
 				return "", err
 			}
-			if value == NULL_BULK_STRING {
-				return ToRespSimpleString(EMPTY_KEY_TYPE), nil
-			}
-			return ToRespSimpleString("string"), nil
+			return ToRespSimpleString(valueType), nil
 		},
 	}
 	XAdd = RespCommand{
@@ -351,14 +346,13 @@ var (
 
 			switch {
 			case isSimpleStream:
-				_, id := args[0], args[1]
-				// Memory[key] =
+				key, id := args[0], args[1]
+				Memory[key] = *NewMemoryItem(NewStreamValue(Stream{}), 0)
 				return ToRespBulkString(id), nil
 			default:
+				fmt.Println("unrecognized xadd args")
 				return ToRespBulkString(""), nil
 			}
-
-			return "", nil
 		},
 	}
 )
