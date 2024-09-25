@@ -347,6 +347,10 @@ var (
 			switch {
 			case isSimpleStream:
 				key, id := args[0], args[1]
+				err := ValidateStreamId(key, id)
+				if err != nil {
+					return
+				}
 				Memory[key] = *NewMemoryItem(NewStreamValue(Stream{}), 0)
 				return ToRespBulkString(id), nil
 			default:

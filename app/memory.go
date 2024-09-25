@@ -6,16 +6,9 @@ import (
 	"time"
 )
 
-// TODOs:
-// Opt 1: Create a memvalue interface with a method and make string and Stream types satisfy it
-//
-//	then pass the new interface as return and param types
-//
-// Opt 1: Make the memItem value an interface altogether
-
 type StreamEntry map[string]interface{}
 
-type Stream map[string]StreamEntry
+type Stream []StreamEntry
 type MemoryValue interface {
 	getValue() interface{}
 }

@@ -27,6 +27,7 @@ const (
 	INTEGER_POSITIVE              = "+"
 	INTEGER_NEGATIVE              = "-"
 	EMPTY_KEY_TYPE                = "none"
+	ERROR                         = "-ERR"
 )
 
 // RESP protocol raw constants. Use for regex.

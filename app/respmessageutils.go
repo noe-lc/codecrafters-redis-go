@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 func extractCommandAndArgs(message string) (string, []string) {
@@ -95,6 +97,15 @@ func ToRespInteger(intString string) string {
 	}
 
 	return INTEGER + intString + PROTOCOL_TERMINATOR
+}
+
+func ToRespError(err error) string {
+	msg := []byte(err.Error())
+	_, size := utf8.DecodeRune(msg)
+	// TODO: use the size to extract the bytes from the string, uppercase them, and then join the rest
+	firstRune = unicode.ToUpper(firstRune)
+	b := byte(firstRune)
+	return ERROR + " " + ""
 }
 
 func BuildPsyncResponse(masterId string) string {
