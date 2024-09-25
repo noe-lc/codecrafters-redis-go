@@ -111,7 +111,7 @@ var (
 			if expiresInMs != 0 {
 				itemExpires = time.Now().UnixMilli() + int64(expiresInMs)
 			}
-			Memory[key] = *NewMemoryItem(value, itemExpires)
+			Memory[key] = *NewMemoryItem(NewStringValue(value), itemExpires)
 			return ToRespSimpleString("OK"), nil
 		},
 	}
@@ -122,7 +122,7 @@ var (
 			memItem, exists := Memory[key]
 
 			if exists {
-				value, err := memItem.GetValue()
+				_, err := memItem.GetValue()
 				if err != nil {
 					if err == ErrExpiredKey {
 						return NULL_BULK_STRING, nil
@@ -131,7 +131,11 @@ var (
 					return "", err
 				}
 
-				return ToRespBulkString(value), nil
+				respString, err := memItem.ToRespString()
+				if err != nil {
+					return "", err
+				}
+				return respString, nil
 			}
 
 			filePath := GetRDBFilePath(server)
@@ -158,7 +162,8 @@ var (
 				if entry.expiry != 0 {
 					expires = entry.expiry
 				}
-				memItem := NewMemoryItem(entry.value, expires)
+				memValue := NewStringValue(entry.value)
+				memItem := NewMemoryItem(memValue, expires)
 				value, err := memItem.GetValue()
 				if err != nil {
 					if err == ErrExpiredKey {
@@ -167,7 +172,7 @@ var (
 					return "", err
 				}
 
-				return ToRespBulkString(value), nil
+				return ToRespBulkString(value.(string)), nil
 			}
 
 			return NULL_BULK_STRING, nil
@@ -346,10 +351,11 @@ var (
 
 			switch {
 			case isSimpleStream:
-				key, id := args[0], args[1]
-				return ToRespArrayString(""), nil
+				_, id := args[0], args[1]
+				// Memory[key] =
+				return ToRespBulkString(id), nil
 			default:
-				return ToRespArrayString(""), nil
+				return ToRespBulkString(""), nil
 			}
 
 			return "", nil
