@@ -21,6 +21,7 @@ func ValidateStreamId(memoryKey, id string) error {
 		if ms == 0 && seq == 0 {
 			return errors.New("the ID specified in XADD must be greater than 0-0")
 		}
+		return nil
 	}
 
 	stream := memItem.value.getValue().(Stream)

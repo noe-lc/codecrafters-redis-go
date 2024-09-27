@@ -5,7 +5,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"unicode"
 	"unicode/utf8"
 )
 
@@ -100,12 +99,10 @@ func ToRespInteger(intString string) string {
 }
 
 func ToRespError(err error) string {
-	msg := []byte(err.Error())
-	_, size := utf8.DecodeRune(msg)
-	// TODO: use the size to extract the bytes from the string, uppercase them, and then join the rest
-	firstRune = unicode.ToUpper(firstRune)
-	b := byte(firstRune)
-	return ERROR + " " + ""
+	msg := err.Error()
+	_, size := utf8.DecodeRuneInString(msg)
+	msg = strings.ToUpper(msg[:size]) + msg[size:]
+	return ERROR + " " + msg
 }
 
 func BuildPsyncResponse(masterId string) string {

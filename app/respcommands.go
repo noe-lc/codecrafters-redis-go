@@ -349,7 +349,7 @@ var (
 				key, id := args[0], args[1]
 				err := ValidateStreamId(key, id)
 				if err != nil {
-					return
+					return ToRespError(err), nil
 				}
 				Memory[key] = *NewMemoryItem(NewStreamValue(Stream{}), 0)
 				return ToRespBulkString(id), nil

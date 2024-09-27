@@ -43,7 +43,25 @@ var (
 )
 
 func InsertIntoMemory(key string, item MemoryItem) {
-	Memory[key] = item
+	t, err := item.Type()
+	if err != nil {
+		fmt.Println(err)
+	}
+	switch t {
+	case "stream":
+		currentStream, ok := Memory[key]
+		if ok {
+			stream := currentStream.getValueDirectly().(Stream)
+			streamItem, _ := item.getValueDirectly().(StreamEntry)
+			s := StreamValue{append(stream, streamItem)}
+			Memory[key] = MemoryItem{value: s}
+
+		}
+
+	default:
+		Memory[key] = item
+	}
+
 }
 
 type MemoryItem struct {
@@ -64,6 +82,14 @@ func (c *MemoryItem) GetValue() (interface{}, error) {
 	}
 
 	return c.value.getValue(), nil
+}
+
+func (c *MemoryItem) getValueDirectly() interface{} {
+	return c.value.getValue()
+}
+
+func (c *MemoryItem) Update() (interface{}, error) {
+
 }
 
 func (c *MemoryItem) Type() (string, error) {
