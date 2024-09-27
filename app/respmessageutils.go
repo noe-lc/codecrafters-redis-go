@@ -102,7 +102,7 @@ func ToRespError(err error) string {
 	msg := err.Error()
 	_, size := utf8.DecodeRuneInString(msg)
 	msg = strings.ToUpper(msg[:size]) + msg[size:]
-	return ERROR + " " + msg
+	return ERROR + " " + msg + PROTOCOL_TERMINATOR
 }
 
 func BuildPsyncResponse(masterId string) string {

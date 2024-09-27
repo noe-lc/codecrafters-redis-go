@@ -111,7 +111,9 @@ var (
 			if expiresInMs != 0 {
 				itemExpires = time.Now().UnixMilli() + int64(expiresInMs)
 			}
-			Memory[key] = *NewMemoryItem(NewStringValue(value), itemExpires)
+			str := StringValue(value)
+
+			Memory[key] = MemoryItem{&str, itemExpires}
 			return ToRespSimpleString("OK"), nil
 		},
 	}
@@ -162,9 +164,9 @@ var (
 				if entry.expiry != 0 {
 					expires = entry.expiry
 				}
-				memValue := NewStringValue(entry.value)
-				memItem := NewMemoryItem(memValue, expires)
-				value, err := memItem.GetValue()
+				memValue := StringValue(entry.value)
+				memItem := MemoryItem{&memValue, expires}
+				_, err := memItem.GetValue()
 				if err != nil {
 					if err == ErrExpiredKey {
 						return NULL_BULK_STRING, nil
@@ -172,7 +174,7 @@ var (
 					return "", err
 				}
 
-				return ToRespBulkString(value.(string)), nil
+				return ToRespBulkString(entry.value), nil
 			}
 
 			return NULL_BULK_STRING, nil
@@ -331,10 +333,7 @@ var (
 					return "", err
 				}
 			}
-			valueType, err := memItem.Type()
-			if err != nil {
-				return "", err
-			}
+			_, valueType := memItem.GetValueDirectly()
 			return ToRespSimpleString(valueType), nil
 		},
 	}
@@ -351,7 +350,9 @@ var (
 				if err != nil {
 					return ToRespError(err), nil
 				}
-				Memory[key] = *NewMemoryItem(NewStreamValue(Stream{}), 0)
+				streamKey, streamValue := args[2], args[3]
+				Memory.AddStreamItem(key, StreamItem{"id": id, streamKey: streamValue})
+				// Memory[key] = MemoryItem{&StreamValue{}, 0}
 				return ToRespBulkString(id), nil
 			default:
 				fmt.Println("unrecognized xadd args")
