@@ -340,13 +340,14 @@ var (
 	XAdd = RespCommand{
 		Execute: func(args []string, rs RedisServer) (string, error) {
 			concatArgs := strings.Join(args, " ")
-			simpleStreamRegExp := `(\w+){1} [0-9]+-([0-9]+|\*)+ (\w+ )+\w+$`
+			simpleStreamRegExp := `(\w+){1} (([0-9]+-([0-9]|\*))+|\*{1}) (\w+ )+\w+$`
 			isSimpleStream, _ := regexp.MatchString(simpleStreamRegExp, concatArgs)
 
 			switch {
 			case isSimpleStream:
 				key, idArg := args[0], args[1]
 				newId, err := GenerateStreamId(key, idArg)
+				fmt.Println("new id", newId)
 				if err != nil {
 					return ToRespError(err), nil
 				}
