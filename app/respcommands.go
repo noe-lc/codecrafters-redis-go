@@ -340,20 +340,20 @@ var (
 	XAdd = RespCommand{
 		Execute: func(args []string, rs RedisServer) (string, error) {
 			concatArgs := strings.Join(args, " ")
-			simpleStreamRegExp := `(\w+){1} [-0-9]+ (\w+ )+\w+$`
+			simpleStreamRegExp := `(\w+){1} [0-9]+-([0-9]+|\*)+ (\w+ )+\w+$`
 			isSimpleStream, _ := regexp.MatchString(simpleStreamRegExp, concatArgs)
 
 			switch {
 			case isSimpleStream:
-				key, id := args[0], args[1]
-				err := ValidateStreamId(key, id)
+				key, idArg := args[0], args[1]
+				newId, err := GenerateStreamId(key, idArg)
 				if err != nil {
 					return ToRespError(err), nil
 				}
 				streamKey, streamValue := args[2], args[3]
-				Memory.AddStreamItem(key, StreamItem{"id": id, streamKey: streamValue})
+				Memory.AddStreamItem(key, StreamItem{"id": newId, streamKey: streamValue})
 				// Memory[key] = MemoryItem{&StreamValue{}, 0}
-				return ToRespBulkString(id), nil
+				return ToRespBulkString(newId), nil
 			default:
 				fmt.Println("unrecognized xadd args")
 				return ToRespBulkString(""), nil
