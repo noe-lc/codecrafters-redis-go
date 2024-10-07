@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -69,18 +68,15 @@ func GenerateStreamId(memoryKey, id string) (string, error) {
 			return strconv.Itoa(ms) + "-" + "0", nil
 		}
 		if ms < lastMs {
-			fmt.Println("here1")
 			return "", errors.New("the ID specified in XADD is equal or smaller than the target stream top item")
 		}
 		if seq <= lastSeq {
-			fmt.Println("here2")
 			return "", errors.New("the ID specified in XADD is equal or smaller than the target stream top item")
 		}
 		return strconv.Itoa(ms) + "-" + strconv.Itoa(seq), nil
 	}
 
 	if ms < lastMs {
-		fmt.Println("here")
 		return "", errors.New("the ID specified in XADD is equal or smaller than the target stream top item")
 	}
 	if ms > lastMs {

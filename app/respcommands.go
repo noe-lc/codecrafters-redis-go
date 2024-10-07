@@ -26,6 +26,7 @@ const (
 	KEYS     = "KEYS"
 	TYPE     = "TYPE"
 	XADD     = "XADD"
+	XRANGE   = "XRANGE"
 )
 
 // Command types
@@ -353,12 +354,47 @@ var (
 				}
 				streamKey, streamValue := args[2], args[3]
 				Memory.AddStreamItem(key, StreamItem{"id": newId, streamKey: streamValue})
-				// Memory[key] = MemoryItem{&StreamValue{}, 0}
 				return ToRespBulkString(newId), nil
 			default:
 				fmt.Println("unrecognized xadd args")
 				return ToRespBulkString(""), nil
 			}
+		},
+	}
+	XRange = RespCommand{
+		Execute: func(args []string, rs RedisServer) (string, error) {
+			// XRANGE some_key start_id end_id
+			// XRANGE some_key 1526985054069 1526985054079
+			key, startId, endId := args[0], args[1], args[2]
+			memItem, ok := Memory[key]
+
+			if !ok {
+				return "", fmt.Errorf("stream with key %s does not exist", key)
+			}
+
+			value, valueType := memItem.GetValueDirectly()
+			if valueType != STREAM {
+				return "", fmt.Errorf("value at key %s is not a stream", key)
+			}
+
+			fmt.Println("start, end", startId, endId)
+
+			endId = endId + "-9"
+			matches := []StreamItem{}
+			stream := value.(*StreamValue)
+			for _, item := range *stream {
+				itemId := item["id"].(string)
+				fmt.Println("item id:", itemId)
+				if startId <= itemId && endId >= itemId {
+					matches = append(matches, item)
+				}
+			}
+
+			fmt.Printf("matches: \n%v\n", matches)
+
+			streamRespArray := StreamItemsToRespArray(matches)
+			fmt.Println("stream array: ", streamRespArray)
+			return streamRespArray, nil
 		},
 	}
 )
@@ -376,6 +412,7 @@ var RespCommands = map[string]RespCommand{
 	KEYS:     Keys,
 	TYPE:     Type,
 	XADD:     XAdd,
+	XRANGE:   XRange,
 }
 
 var CommandFlags = map[string]string{

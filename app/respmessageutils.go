@@ -90,6 +90,30 @@ func ToRespArrayString(args ...string) string {
 	return respArrayString
 }
 
+func StreamItemsToRespArray(items []StreamItem) string {
+	// var itemArray [][]interface{}
+	respArray := ARRAY + strconv.Itoa(len(items)) + PROTOCOL_TERMINATOR
+
+	for _, item := range items {
+		// itemArray[i][0] = item["id"]
+		entries := []string{}
+		respArray += ARRAY + "2" + PROTOCOL_TERMINATOR + ToRespBulkString(item["id"].(string))
+
+		for k, v := range item {
+			if k == "id" {
+				continue
+			}
+
+			entries = append(entries, k, v.(string))
+			// itemArray[i][1] = entries
+		}
+
+		respArray += ToRespArrayString(entries...)
+	}
+
+	return respArray
+}
+
 func ToRespInteger(intString string) string {
 	if strings.HasPrefix(intString, INTEGER_NEGATIVE) {
 		return INTEGER + INTEGER_POSITIVE + intString + PROTOCOL_TERMINATOR

@@ -10,8 +10,15 @@ type ServerMemory map[string]MemoryItem
 
 var Memory ServerMemory = ServerMemory{}
 
+// Memory errors
 var (
 	ErrExpiredKey = errors.New("expired key")
+)
+
+// memory item types
+const (
+	STRING = "string"
+	STREAM = "stream"
 )
 
 func (m *ServerMemory) AddStreamItem(key string, item StreamItem) error {
@@ -68,11 +75,12 @@ func (c *MemoryItem) GetValueDirectly() (interface{}, string) {
 func (c *MemoryItem) ToRespString() (string, error) {
 	value, valueType := c.GetValueDirectly()
 	switch valueType {
-	case "string":
+	case STRING:
 		stringValue := value.(*StringValue)
 		return ToRespBulkString(string(*stringValue)), nil
-	case "stream":
-		return "stream", nil
+	case STREAM:
+		// TODO: transform the stream into resp array of arrays here
+		return STREAM, nil
 	default:
 		return "", nil
 	}
@@ -81,7 +89,7 @@ func (c *MemoryItem) ToRespString() (string, error) {
 type StringValue string
 
 func (s *StringValue) getValue() (interface{}, string) {
-	return s, "string"
+	return s, STRING
 }
 
 // TODO: maybe make this a struct to require id
@@ -90,5 +98,5 @@ type StreamItem map[string]interface{}
 type StreamValue []StreamItem
 
 func (s *StreamValue) getValue() (interface{}, string) {
-	return s, "stream"
+	return s, STREAM
 }
