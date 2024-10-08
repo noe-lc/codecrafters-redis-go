@@ -27,6 +27,7 @@ const (
 	TYPE     = "TYPE"
 	XADD     = "XADD"
 	XRANGE   = "XRANGE"
+	XREAD    = "XREAD"
 )
 
 // Command types
@@ -352,8 +353,7 @@ var (
 				if err != nil {
 					return ToRespError(err), nil
 				}
-				streamKey, streamValue := args[2], args[3]
-				Memory.AddStreamItem(key, StreamItem{"id": newId, streamKey: streamValue})
+				Memory.AddStreamItem(key, NewStreamItem(newId, args[2:]))
 				return ToRespBulkString(newId), nil
 			default:
 				fmt.Println("unrecognized xadd args")
@@ -378,22 +378,17 @@ var (
 			stream := *(value.(*StreamValue))
 			streamItemsMatched := []StreamItem{}
 			if endId == XRANGE_PLUS {
-				startIndex := -1
 				for i, item := range stream {
 					itemId := item["id"].(string)
 					if itemId >= startId {
-						startIndex = i
+						streamItemsMatched = stream[i:]
 						break
 					}
-				}
-				if startIndex != -1 {
-					streamItemsMatched = stream[startIndex:]
 				}
 			} else {
 				endId = endId + "-9" // append -9 as suffix to ensure every id is within range
 				for _, item := range stream {
 					itemId := item["id"].(string)
-					fmt.Println("item id:", itemId)
 					if startId <= itemId && endId >= itemId {
 						streamItemsMatched = append(streamItemsMatched, item)
 					}
@@ -406,6 +401,33 @@ var (
 			newMemItem := MemoryItem{&newStream, 0}
 			respStringResponse, _ := newMemItem.ToRespString()
 			return respStringResponse, nil
+		},
+	}
+	XRead = RespCommand{
+		Execute: func(args []string, rs RedisServer) (string, error) {
+			_, key, id := args[0], args[1], args[2]
+			memItem, ok := Memory[key]
+			if !ok {
+				return "", fmt.Errorf("stream with key %s does not exist", key)
+			}
+			value, valueType := memItem.GetValueDirectly()
+			if valueType != STREAM {
+				return "", fmt.Errorf("value at key %s is not a stream", key)
+			}
+			stream := *(value.(*StreamValue))
+			streamItemsMatched := []StreamItem{}
+			for i, item := range stream {
+				itemId := item["id"].(string)
+				if itemId > id {
+					streamItemsMatched = stream[i:]
+					break
+				}
+			}
+
+			idStreamItemsStr := ARRAY + "1" + PROTOCOL_TERMINATOR + ARRAY + "2" + PROTOCOL_TERMINATOR + ToRespBulkString(key)
+			idStreamItemsStr += StreamItemsToRespArray(streamItemsMatched)
+			fmt.Println("XREAD", idStreamItemsStr)
+			return idStreamItemsStr, nil
 		},
 	}
 )
@@ -424,6 +446,7 @@ var RespCommands = map[string]RespCommand{
 	TYPE:     Type,
 	XADD:     XAdd,
 	XRANGE:   XRange,
+	XREAD:    XRead,
 }
 
 var CommandFlags = map[string]string{

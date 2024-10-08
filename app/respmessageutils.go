@@ -95,7 +95,6 @@ func StreamItemsToRespArray(items []StreamItem) string {
 	respArray := ARRAY + strconv.Itoa(len(items)) + PROTOCOL_TERMINATOR
 
 	for _, item := range items {
-		// itemArray[i][0] = item["id"]
 		entries := []string{}
 		respArray += ARRAY + "2" + PROTOCOL_TERMINATOR + ToRespBulkString(item["id"].(string))
 
@@ -105,7 +104,6 @@ func StreamItemsToRespArray(items []StreamItem) string {
 			}
 
 			entries = append(entries, k, v.(string))
-			// itemArray[i][1] = entries
 		}
 
 		respArray += ToRespArrayString(entries...)

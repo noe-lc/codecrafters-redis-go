@@ -28,8 +28,6 @@ const (
 )
 
 func (m *ServerMemory) AddStreamItem(key string, item StreamItem) error {
-	var currentValue interface{}
-	var currentValueType string
 	memItem, exists := Memory[key]
 
 	if !exists {
@@ -37,16 +35,13 @@ func (m *ServerMemory) AddStreamItem(key string, item StreamItem) error {
 		return nil
 	}
 
-	currentValue, currentValueType = memItem.GetValueDirectly()
-	switch currentValueType {
-	case "stream":
-		stream := currentValue.(*StreamValue)
-		newStream := StreamValue(append(*stream, item))
-		Memory[key] = MemoryItem{&newStream, 0}
-	default:
+	value, valueType := memItem.GetValueDirectly()
+	if valueType != STREAM {
 		return fmt.Errorf("cannot insert stream item to non-stream key `%s`", key)
 	}
-
+	stream := value.(*StreamValue)
+	newStream := StreamValue(append(*stream, item))
+	Memory[key] = MemoryItem{&newStream, 0}
 	return nil
 }
 
@@ -104,6 +99,21 @@ func (s *StringValue) getValue() (interface{}, string) {
 
 // TODO: maybe make this a struct to require id
 type StreamItem map[string]interface{}
+
+func NewStreamItem(id string, entries []string) StreamItem {
+	prevKey := ""
+	streamItem := StreamItem{"id": id}
+	for _, entry := range entries {
+		if prevKey != "" {
+			streamItem[prevKey] = entry
+			prevKey = ""
+		} else {
+			prevKey = entry
+		}
+	}
+
+	return streamItem
+}
 
 type StreamValue []StreamItem
 
