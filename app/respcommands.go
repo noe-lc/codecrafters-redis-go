@@ -395,8 +395,6 @@ var (
 				}
 			}
 
-			fmt.Printf("streamItemsMatched: \n%v\n", streamItemsMatched)
-
 			newStream := StreamValue(streamItemsMatched)
 			newMemItem := MemoryItem{&newStream, 0}
 			respStringResponse, _ := newMemItem.ToRespString()
@@ -405,26 +403,34 @@ var (
 	}
 	XRead = RespCommand{
 		Execute: func(args []string, rs RedisServer) (string, error) {
-			_, key, id := args[0], args[1], args[2]
-			memItem, ok := Memory[key]
-			if !ok {
-				return "", fmt.Errorf("stream with key %s does not exist", key)
-			}
-			value, valueType := memItem.GetValueDirectly()
-			if valueType != STREAM {
-				return "", fmt.Errorf("value at key %s is not a stream", key)
-			}
-			stream := *(value.(*StreamValue))
+			numKeys := len(args[1:]) / 2
 			streamItemsMatched := []StreamItem{}
-			for i, item := range stream {
-				itemId := item["id"].(string)
-				if itemId > id {
-					streamItemsMatched = stream[i:]
-					break
+			idStreamItemsStr := ARRAY + strconv.Itoa(numKeys) + PROTOCOL_TERMINATOR
+
+			for keyIndex := 1; keyIndex <= numKeys; keyIndex++ {
+				idIndex := numKeys + keyIndex
+				key, id := args[keyIndex], args[idIndex]
+				memItem, ok := Memory[key]
+				if !ok {
+					return "", fmt.Errorf("stream with key %s does not exist", key)
 				}
+				value, valueType := memItem.GetValueDirectly()
+				if valueType != STREAM {
+					return "", fmt.Errorf("value at key %s is not a stream", key)
+				}
+				stream := *(value.(*StreamValue))
+
+				for i, item := range stream {
+					itemId := item["id"].(string)
+					if itemId > id {
+						streamItemsMatched = stream[i:]
+						break
+					}
+				}
+
+				idStreamItemsStr += ARRAY + "2" + PROTOCOL_TERMINATOR + ToRespBulkString(key) + StreamItemsToRespArray(streamItemsMatched)
 			}
 
-			idStreamItemsStr := ARRAY + "1" + PROTOCOL_TERMINATOR + ARRAY + "2" + PROTOCOL_TERMINATOR + ToRespBulkString(key)
 			idStreamItemsStr += StreamItemsToRespArray(streamItemsMatched)
 			fmt.Println("XREAD", idStreamItemsStr)
 			return idStreamItemsStr, nil
