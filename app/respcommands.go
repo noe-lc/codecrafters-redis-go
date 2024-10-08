@@ -363,8 +363,6 @@ var (
 	}
 	XRange = RespCommand{
 		Execute: func(args []string, rs RedisServer) (string, error) {
-			// XRANGE some_key start_id end_id
-			// XRANGE some_key 1526985054069 1526985054079
 			key, startId, endId := args[0], args[1], args[2]
 			memItem, ok := Memory[key]
 
@@ -377,24 +375,37 @@ var (
 				return "", fmt.Errorf("value at key %s is not a stream", key)
 			}
 
-			fmt.Println("start, end", startId, endId)
-
-			endId = endId + "-9"
-			matches := []StreamItem{}
-			stream := value.(*StreamValue)
-			for _, item := range *stream {
-				itemId := item["id"].(string)
-				fmt.Println("item id:", itemId)
-				if startId <= itemId && endId >= itemId {
-					matches = append(matches, item)
+			stream := *(value.(*StreamValue))
+			streamItemsMatched := []StreamItem{}
+			if endId == XRANGE_PLUS {
+				startIndex := -1
+				for i, item := range stream {
+					itemId := item["id"].(string)
+					if itemId >= startId {
+						startIndex = i
+						break
+					}
+				}
+				if startIndex != -1 {
+					streamItemsMatched = stream[startIndex:]
+				}
+			} else {
+				endId = endId + "-9" // append -9 as suffix to ensure every id is within range
+				for _, item := range stream {
+					itemId := item["id"].(string)
+					fmt.Println("item id:", itemId)
+					if startId <= itemId && endId >= itemId {
+						streamItemsMatched = append(streamItemsMatched, item)
+					}
 				}
 			}
 
-			fmt.Printf("matches: \n%v\n", matches)
+			fmt.Printf("streamItemsMatched: \n%v\n", streamItemsMatched)
 
-			streamRespArray := StreamItemsToRespArray(matches)
-			fmt.Println("stream array: ", streamRespArray)
-			return streamRespArray, nil
+			newStream := StreamValue(streamItemsMatched)
+			newMemItem := MemoryItem{&newStream, 0}
+			respStringResponse, _ := newMemItem.ToRespString()
+			return respStringResponse, nil
 		},
 	}
 )

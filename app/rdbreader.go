@@ -293,10 +293,6 @@ func GetRDBEntries(filePath string) ([]RDBTableEntry, error) {
 	tableEntriesExp := []RDBTableEntry{}
 	tableEntriesNoExp := []RDBTableEntry{}
 
-	fmt.Println("Table sizes")
-	fmt.Println("size: ", tableSize)
-	fmt.Println("expire size: ", tableExpireSize)
-
 	for {
 		// var buffer bytes.Buffer
 		buf := make([]byte, 1)
@@ -353,7 +349,6 @@ func GetRDBEntries(filePath string) ([]RDBTableEntry, error) {
 		}
 
 		currentTableSize := len(tableEntriesExp) + len(tableEntriesNoExp)
-		fmt.Println("current table size:", currentTableSize)
 		if len(tableEntriesExp) == int(tableExpireSize) && currentTableSize == int(tableSize) {
 			fmt.Println("Finished reading for keys and values")
 			break
@@ -389,7 +384,6 @@ func getTableKeyAndValue(r *bufio.Reader) ([2]string, error) {
 			return [2]string{}, err
 		}
 
-		// fmt.Println("sizeBytes", sizeBytes)
 		valueType, bitRange, sizeEncodingBytes, err := decodeTypeAttrs(sizeBytes[0])
 		if err != nil {
 			fmt.Println("failed to decode type attributes for ", sizeBytes[0])
@@ -400,10 +394,6 @@ func getTableKeyAndValue(r *bufio.Reader) ([2]string, error) {
 		}
 
 		var value string
-		/* if valueType == "int" {
-			value, err = decodeInt(valueSizeBytes, bitRange)
-		} */
-		//if valueType == "string" { }
 		stringLength, err := getStringLength(sizeBytes, bitRange)
 		if err != nil {
 			fmt.Println("failed to get string length")

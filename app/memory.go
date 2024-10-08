@@ -21,6 +21,12 @@ const (
 	STREAM = "stream"
 )
 
+// memory item utility values
+const (
+	XRANGE_MINUS = "-"
+	XRANGE_PLUS  = "+"
+)
+
 func (m *ServerMemory) AddStreamItem(key string, item StreamItem) error {
 	var currentValue interface{}
 	var currentValueType string
@@ -72,6 +78,8 @@ func (c *MemoryItem) GetValueDirectly() (interface{}, string) {
 	return c.value.getValue()
 }
 
+// ToRespString transforms the value into the required response RESP string.
+// It receives the same list of arguments as the command does on each RespCommand Execute call.
 func (c *MemoryItem) ToRespString() (string, error) {
 	value, valueType := c.GetValueDirectly()
 	switch valueType {
@@ -79,8 +87,10 @@ func (c *MemoryItem) ToRespString() (string, error) {
 		stringValue := value.(*StringValue)
 		return ToRespBulkString(string(*stringValue)), nil
 	case STREAM:
-		// TODO: transform the stream into resp array of arrays here
-		return STREAM, nil
+		stream := value.(*StreamValue)
+		streamRespArray := StreamItemsToRespArray(*stream)
+		fmt.Println("stream array: ", streamRespArray)
+		return streamRespArray, nil
 	default:
 		return "", nil
 	}
