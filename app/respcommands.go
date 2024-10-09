@@ -348,15 +348,19 @@ var (
 			switch {
 			case isSimpleStream:
 				key, idArg := args[0], args[1]
+				blockedStream := rs.GetXReadBlock()
+				hasBlock := key == blockedStream.key // && idArg == blockedStream.id
 				newId, err := GenerateStreamId(key, idArg)
-				fmt.Println("new id", newId)
 				if err != nil {
 					return ToRespError(err), nil
+				}
+				if hasBlock {
+					return ToRespBulkString(newId), nil
 				}
 				Memory.AddStreamItem(key, NewStreamItem(newId, args[2:]))
 				return ToRespBulkString(newId), nil
 			default:
-				fmt.Println("unrecognized xadd args")
+				fmt.Println("unrecognized XADD args")
 				return ToRespBulkString(""), nil
 			}
 		},
@@ -403,37 +407,79 @@ var (
 	}
 	XRead = RespCommand{
 		Execute: func(args []string, rs RedisServer) (string, error) {
+			concatArgs := strings.Join(args, " ")
+			blockRegex := `^block \d+ streams \w+ (([0-9]+-([0-9]|\*))+|\*{1})$`
+			streamReadRegex := `streams (\w+ )+((([0-9]+-([0-9]|\*))+|\*{1}) )+(([0-9]+-([0-9]|\*))+|\*{1})$`
+
+			blockedStream := rs.GetXReadBlock()
 			numKeys := len(args[1:]) / 2
 			streamItemsMatched := []StreamItem{}
 			idStreamItemsStr := ARRAY + strconv.Itoa(numKeys) + PROTOCOL_TERMINATOR
+			isBlockRead, _ := regexp.MatchString(blockRegex, concatArgs)
+			isSimpleRead, _ := regexp.MatchString(streamReadRegex, concatArgs)
 
-			for keyIndex := 1; keyIndex <= numKeys; keyIndex++ {
-				idIndex := numKeys + keyIndex
-				key, id := args[keyIndex], args[idIndex]
-				memItem, ok := Memory[key]
-				if !ok {
-					return "", fmt.Errorf("stream with key %s does not exist", key)
-				}
-				value, valueType := memItem.GetValueDirectly()
-				if valueType != STREAM {
-					return "", fmt.Errorf("value at key %s is not a stream", key)
-				}
-				stream := *(value.(*StreamValue))
-
-				for i, item := range stream {
-					itemId := item["id"].(string)
-					if itemId > id {
-						streamItemsMatched = stream[i:]
-						break
+			if isSimpleRead {
+				for keyIndex := 1; keyIndex <= numKeys; keyIndex++ {
+					idIndex := numKeys + keyIndex
+					key, id := args[keyIndex], args[idIndex]
+					hasBlock := key == blockedStream.key // && id == blockedStream.id
+					if hasBlock {
+						return NULL_BULK_STRING, nil
 					}
+
+					memItem, ok := Memory[key]
+					if !ok {
+						return "", fmt.Errorf("stream with key %s does not exist", key)
+					}
+					value, valueType := memItem.GetValueDirectly()
+					if valueType != STREAM {
+						return "", fmt.Errorf("value at key %s is not a stream", key)
+					}
+					stream := *(value.(*StreamValue))
+
+					for i, item := range stream {
+						itemId := item["id"].(string)
+						if itemId > id {
+							streamItemsMatched = stream[i:]
+							break
+						}
+					}
+
+					idStreamItemsStr += ARRAY + "2" + PROTOCOL_TERMINATOR + ToRespBulkString(key) + StreamItemsToRespArray(streamItemsMatched)
 				}
 
-				idStreamItemsStr += ARRAY + "2" + PROTOCOL_TERMINATOR + ToRespBulkString(key) + StreamItemsToRespArray(streamItemsMatched)
+				idStreamItemsStr += StreamItemsToRespArray(streamItemsMatched)
+				return idStreamItemsStr, nil
 			}
 
-			idStreamItemsStr += StreamItemsToRespArray(streamItemsMatched)
-			fmt.Println("XREAD", idStreamItemsStr)
-			return idStreamItemsStr, nil
+			if isBlockRead {
+				blockMsStr, key, id := args[1], args[3], args[4]
+				hasBlock := key == blockedStream.key // && id == blockedStream.id
+				if hasBlock {
+					return NULL_BULK_STRING, nil
+				}
+				memItem, ok := Memory[key]
+				if !ok {
+					return "", fmt.Errorf("cannot block non-existent key %s", key)
+				}
+				_, valueType := memItem.GetValueDirectly()
+				if valueType != STREAM {
+					return "", fmt.Errorf("cannot block non-stream value at key %s", key)
+				}
+				blockMs, err := strconv.Atoi(blockMsStr)
+				if err != nil {
+					return "", err
+				}
+
+				rs.SetXReadBlock(key, id, XREAD_BLOCKED)
+
+				go func() {
+					time.Sleep(time.Duration(blockMs) * time.Millisecond)
+					rs.SetXReadBlock("", "", XREAD_FREE)
+				}()
+			}
+
+			return "", nil
 		},
 	}
 )

@@ -28,6 +28,8 @@ type RedisServer interface {
 	ReplicaInfo() ReplicaInfo
 	RunCommand(cmp CommandComponents, conn net.Conn) error
 	GetRDBConfig() map[string]string
+	GetXReadBlock() XReadBlock
+	SetXReadBlock(key, id, status string)
 }
 
 func CreateRedisServer(port int, replicaOf string, rdbDir, rdbFileName string) (RedisServer, error) {

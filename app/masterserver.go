@@ -14,6 +14,12 @@ type Replica struct {
 	conn net.Conn
 }
 
+type XReadBlock struct {
+	key    string
+	id     string
+	status string
+}
+
 type RedisMasterServer struct {
 	Role        string
 	Host        string
@@ -25,7 +31,14 @@ type RedisMasterServer struct {
 	replicaInfo ReplicaInfo
 	history     CommandHistory
 	rdbConfig   map[string]string
+	xReadBlock  XReadBlock
 }
+
+// additional statuses for XREAD blocks
+const (
+	XREAD_FREE    = "FREE"
+	XREAD_BLOCKED = "BLOCKED"
+)
 
 func NewMasterServer(port int, rdbDir, rdbFileName string) RedisMasterServer {
 	server := RedisMasterServer{
@@ -150,6 +163,15 @@ func (r *RedisMasterServer) SetAcknowledgeItem(historyItem *CommandHistoryItem, 
 
 func (r *RedisMasterServer) GetRDBConfig() map[string]string {
 	return r.rdbConfig
+}
+
+func (r *RedisMasterServer) GetXReadBlock() XReadBlock {
+	return r.xReadBlock
+}
+
+func (r *RedisMasterServer) SetXReadBlock(key, id, status string) {
+	r.xReadBlock.key = key
+	r.xReadBlock.id = id
 }
 
 func (r *RedisMasterServer) propagateCommand(rawInput string /* historyItem *CommandHistoryItem */) []error {
