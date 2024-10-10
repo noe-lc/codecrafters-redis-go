@@ -354,23 +354,11 @@ var (
 				if err != nil {
 					return ToRespError(err), nil
 				}
-
 				if hasBlock {
-					if blockedStream.status == XREAD_BLOCKED {
-						fmt.Println("added with BLOCKED")
-						streamItem := NewStreamItem(newId, args[2:])
-						Memory.AddStreamItem(key, streamItem)
-						return StreamItemsToRespArray([]StreamItem{streamItem}), nil
-					}
-					if blockedStream.status == XREAD_FREE {
-						fmt.Println("NOT ADDED")
-						return NULL_BULK_STRING, nil
-					}
 					return ToRespBulkString(newId), nil
 				}
 
 				Memory.AddStreamItem(key, NewStreamItem(newId, args[2:]))
-				fmt.Println("item added")
 				return ToRespBulkString(newId), nil
 			default:
 				fmt.Println("unrecognized XADD args")
@@ -431,23 +419,16 @@ var (
 			isSimpleRead, _ := regexp.MatchString(streamReadRegex, concatArgs)
 
 			if isSimpleRead {
-				fmt.Println("simple read")
 				for keyIndex := 1; keyIndex <= numKeys; keyIndex++ {
 					idIndex := numKeys + keyIndex
 					key, id := args[keyIndex], args[idIndex]
 					if key == blockedStream.key && blockedStream.status == XREAD_FREE {
 						return NULL_BULK_STRING, nil
 					}
-
-					memItem, ok := Memory[key]
-					if !ok {
-						return "", fmt.Errorf("stream with key %s does not exist", key)
+					stream, err := Memory.LookupStream(key)
+					if err != nil {
+						return "", err
 					}
-					value, valueType := memItem.GetValueDirectly()
-					if valueType != STREAM {
-						return "", fmt.Errorf("value at key %s is not a stream", key)
-					}
-					stream := *(value.(*StreamValue))
 
 					for i, item := range stream {
 						itemId := item["id"].(string)
@@ -466,25 +447,33 @@ var (
 
 			if isBlockRead {
 				blockMsStr, key, id := args[1], args[3], args[4]
-				memItem, ok := Memory[key]
-				if !ok {
-					return "", fmt.Errorf("cannot block non-existent key %s", key)
-				}
-				_, valueType := memItem.GetValueDirectly()
-				if valueType != STREAM {
-					return "", fmt.Errorf("cannot block non-stream value at key %s", key)
+				stream, err := Memory.LookupStream(key)
+				if err != nil {
+					return "", err
 				}
 				blockMs, err := strconv.Atoi(blockMsStr)
 				if err != nil {
 					return "", err
 				}
 
-				rs.SetXReadBlock(key, id, XREAD_BLOCKED)
+				hasBlock := key == blockedStream.key // && idArg == blockedStream.id
+				if hasBlock {
+					streamItem, err := stream.LookupItem(id)
+					if err != nil {
+						return NULL_BULK_STRING, nil
+					}
+					respResponse := ARRAY + "1" + PROTOCOL_TERMINATOR + ARRAY + "2" + PROTOCOL_TERMINATOR + strconv.Itoa(len(key)) + PROTOCOL_TERMINATOR + key + PROTOCOL_TERMINATOR + StreamItemsToRespArray([]StreamItem{streamItem})
+					return respResponse, nil
+				}
+
+				rs.SetXReadBlock(key, id, "")
+
+				fmt.Println("blocking for ms: ", blockMs)
 
 				go func() {
 					time.Sleep(time.Duration(blockMs) * time.Millisecond)
 					fmt.Println("end sleep")
-					rs.SetXReadBlock(key, id, XREAD_FREE)
+					rs.SetXReadBlock("", "", "")
 				}()
 			}
 

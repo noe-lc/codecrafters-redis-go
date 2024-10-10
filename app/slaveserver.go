@@ -195,6 +195,7 @@ func (r *RedisSlaveServer) GetXReadBlock() XReadBlock {
 func (r *RedisSlaveServer) SetXReadBlock(key, id, status string) {
 	r.xReadBlock.key = key
 	r.xReadBlock.id = id
+	r.xReadBlock.status = status
 }
 
 func (r *RedisSlaveServer) acceptConnections(l net.Listener) error {

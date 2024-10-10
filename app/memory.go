@@ -45,6 +45,18 @@ func (m *ServerMemory) AddStreamItem(key string, item StreamItem) error {
 	return nil
 }
 
+func (m *ServerMemory) LookupStream(key string) (StreamValue, error) {
+	memItem, ok := (*m)[key]
+	if !ok {
+		return nil, fmt.Errorf("stream with key %s does not exist", key)
+	}
+	value, valueType := memItem.GetValueDirectly()
+	if valueType != STREAM {
+		return nil, fmt.Errorf("value at key %s is not a stream", key)
+	}
+	return *(value.(*StreamValue)), nil
+}
+
 type MemoryItem struct {
 	value   MemoryItemValue
 	expires int64
@@ -119,4 +131,14 @@ type StreamValue []StreamItem
 
 func (s *StreamValue) getValue() (interface{}, string) {
 	return s, STREAM
+}
+
+func (s *StreamValue) LookupItem(id string) (StreamItem, error) {
+	for _, item := range *s {
+		itemId := item["id"].(string)
+		if itemId == id {
+			return item, nil
+		}
+	}
+	return nil, errors.New("stream item not found")
 }
