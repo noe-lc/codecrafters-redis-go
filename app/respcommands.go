@@ -354,10 +354,23 @@ var (
 				if err != nil {
 					return ToRespError(err), nil
 				}
+
 				if hasBlock {
+					if blockedStream.status == XREAD_BLOCKED {
+						fmt.Println("added with BLOCKED")
+						streamItem := NewStreamItem(newId, args[2:])
+						Memory.AddStreamItem(key, streamItem)
+						return StreamItemsToRespArray([]StreamItem{streamItem}), nil
+					}
+					if blockedStream.status == XREAD_FREE {
+						fmt.Println("NOT ADDED")
+						return NULL_BULK_STRING, nil
+					}
 					return ToRespBulkString(newId), nil
 				}
+
 				Memory.AddStreamItem(key, NewStreamItem(newId, args[2:]))
+				fmt.Println("item added")
 				return ToRespBulkString(newId), nil
 			default:
 				fmt.Println("unrecognized XADD args")
@@ -409,8 +422,7 @@ var (
 		Execute: func(args []string, rs RedisServer) (string, error) {
 			concatArgs := strings.Join(args, " ")
 			blockRegex := `^block \d+ streams \w+ (([0-9]+-([0-9]|\*))+|\*{1})$`
-			streamReadRegex := `streams (\w+ )+((([0-9]+-([0-9]|\*))+|\*{1}) )+(([0-9]+-([0-9]|\*))+|\*{1})$`
-
+			streamReadRegex := `^streams (\w+ )+((([0-9]+-([0-9]|\*))+|\*{1}) )*(([0-9]+-([0-9]|\*))+|\*{1})$`
 			blockedStream := rs.GetXReadBlock()
 			numKeys := len(args[1:]) / 2
 			streamItemsMatched := []StreamItem{}
@@ -419,11 +431,11 @@ var (
 			isSimpleRead, _ := regexp.MatchString(streamReadRegex, concatArgs)
 
 			if isSimpleRead {
+				fmt.Println("simple read")
 				for keyIndex := 1; keyIndex <= numKeys; keyIndex++ {
 					idIndex := numKeys + keyIndex
 					key, id := args[keyIndex], args[idIndex]
-					hasBlock := key == blockedStream.key // && id == blockedStream.id
-					if hasBlock {
+					if key == blockedStream.key && blockedStream.status == XREAD_FREE {
 						return NULL_BULK_STRING, nil
 					}
 
@@ -454,10 +466,6 @@ var (
 
 			if isBlockRead {
 				blockMsStr, key, id := args[1], args[3], args[4]
-				hasBlock := key == blockedStream.key // && id == blockedStream.id
-				if hasBlock {
-					return NULL_BULK_STRING, nil
-				}
 				memItem, ok := Memory[key]
 				if !ok {
 					return "", fmt.Errorf("cannot block non-existent key %s", key)
@@ -475,7 +483,8 @@ var (
 
 				go func() {
 					time.Sleep(time.Duration(blockMs) * time.Millisecond)
-					rs.SetXReadBlock("", "", XREAD_FREE)
+					fmt.Println("end sleep")
+					rs.SetXReadBlock(key, id, XREAD_FREE)
 				}()
 			}
 
