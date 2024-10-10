@@ -408,6 +408,7 @@ var (
 	}
 	XRead = RespCommand{
 		Execute: func(args []string, rs RedisServer) (string, error) {
+			return NULL_BULK_STRING, nil
 			concatArgs := strings.Join(args, " ")
 			blockRegex := `^block \d+ streams \w+ (([0-9]+-([0-9]|\*))+|\*{1})$`
 			streamReadRegex := `^streams (\w+ )+((([0-9]+-([0-9]|\*))+|\*{1}) )*(([0-9]+-([0-9]|\*))+|\*{1})$`

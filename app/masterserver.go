@@ -94,6 +94,7 @@ func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn) err
 
 	// 1. command executors produce the output to write
 	writeCommandOutput := func() error {
+		// TODO: maybe do not reply on XREAD block
 		result, err := respCommand.Execute(args, r)
 		if err != nil {
 			return err
@@ -131,7 +132,6 @@ func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn) err
 		r.replicas = append(r.replicas, Replica{conn})
 	case REPLCONF:
 		concatArgs := strings.Join(args, " ")
-
 		// REPLCONF ACK <BYTES>
 		if matches, _ := regexp.MatchString(ACK+` `+`\d+`, concatArgs); matches {
 			r.waitAckFor.Acks += 1
