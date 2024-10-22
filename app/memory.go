@@ -27,21 +27,21 @@ const (
 	XRANGE_PLUS  = "+"
 )
 
-func (m *ServerMemory) AddStreamItem(key string, item StreamItem) error {
+func (m *ServerMemory) AddStreamItem(key string, s Stream) error {
 	memItem, exists := Memory[key]
 
 	if !exists {
-		Memory[key] = MemoryItem{&StreamValue{item}, 0}
+		Memory[key] = MemoryItem{&StreamValue{s}, 0}
 		return nil
 	}
 
 	value, valueType := memItem.GetValueDirectly()
 	if valueType != STREAM {
-		return fmt.Errorf("cannot insert stream item to non-stream key `%s`", key)
+		return fmt.Errorf("cannot insert stream s to non-stream key `%s`", key)
 	}
-	stream := value.(*StreamValue)
-	newStream := StreamValue(append(*stream, item))
-	Memory[key] = MemoryItem{&newStream, 0}
+	stream := *(value.(*StreamValue))
+	stream = append(stream, s)
+	Memory[key] = MemoryItem{&stream, 0}
 	return nil
 }
 
@@ -109,36 +109,39 @@ func (s *StringValue) getValue() (interface{}, string) {
 	return s, STRING
 }
 
-// TODO: maybe make this a struct to require id
-type StreamItem map[string]interface{}
+type Stream struct {
+	id      string
+	values  map[string]interface{}
+	created int64
+}
 
-func NewStreamItem(id string, entries []string) StreamItem {
+func NewStreamItem(id string, entries []string) Stream {
 	prevKey := ""
-	streamItem := StreamItem{"id": id}
+	stream := Stream{id: id, created: time.Now().UnixMilli(), values: map[string]interface{}{}}
 	for _, entry := range entries {
 		if prevKey != "" {
-			streamItem[prevKey] = entry
+			stream.values[prevKey] = entry
 			prevKey = ""
 		} else {
 			prevKey = entry
 		}
 	}
 
-	return streamItem
+	return stream
 }
 
-type StreamValue []StreamItem
+type StreamValue []Stream
 
 func (s *StreamValue) getValue() (interface{}, string) {
 	return s, STREAM
 }
 
-func (s *StreamValue) LookupItem(id string) (StreamItem, error) {
-	for _, item := range *s {
-		itemId := item["id"].(string)
+func (s *StreamValue) LookupItem(id string) (Stream, int, error) {
+	for i, stream := range *s {
+		itemId := stream.id
 		if itemId == id {
-			return item, nil
+			return stream, i, nil
 		}
 	}
-	return nil, errors.New("stream item not found")
+	return Stream{}, 0, errors.New("stream item not found")
 }

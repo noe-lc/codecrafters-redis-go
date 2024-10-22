@@ -90,19 +90,15 @@ func ToRespArrayString(args ...string) string {
 	return respArrayString
 }
 
-func StreamItemsToRespArray(items []StreamItem) string {
+func StreamItemsToRespArray(s []Stream) string {
 	// var itemArray [][]interface{}
-	respArray := ARRAY + strconv.Itoa(len(items)) + PROTOCOL_TERMINATOR
+	respArray := ARRAY + strconv.Itoa(len(s)) + PROTOCOL_TERMINATOR
 
-	for _, item := range items {
+	for _, stream := range s {
 		entries := []string{}
-		respArray += ARRAY + "2" + PROTOCOL_TERMINATOR + ToRespBulkString(item["id"].(string))
+		respArray += ARRAY + "2" + PROTOCOL_TERMINATOR + ToRespBulkString(stream.id)
 
-		for k, v := range item {
-			if k == "id" {
-				continue
-			}
-
+		for k, v := range stream.values {
 			entries = append(entries, k, v.(string))
 		}
 

@@ -59,8 +59,7 @@ func GenerateStreamId(memoryKey, id string) (string, error) {
 
 	streamPtr := value.(*StreamValue)
 	stream := *streamPtr
-	lastStream := stream[len(stream)-1]
-	tLastSplitId, _, _ := splitStreamId(lastStream["id"].(string))
+	tLastSplitId, _, _ := splitStreamId(stream[len(stream)-1].id)
 	lastMs, lastSeq := tLastSplitId[0], tLastSplitId[1]
 
 	if seq != -1 {

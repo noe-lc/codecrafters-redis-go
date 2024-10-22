@@ -14,12 +14,6 @@ type Replica struct {
 	conn net.Conn
 }
 
-type XReadBlock struct {
-	key    string
-	id     string
-	status string
-}
-
 type RedisMasterServer struct {
 	Role        string
 	Host        string
@@ -31,7 +25,6 @@ type RedisMasterServer struct {
 	replicaInfo ReplicaInfo
 	history     CommandHistory
 	rdbConfig   map[string]string
-	xReadBlock  XReadBlock
 }
 
 // additional statuses for XREAD blocks
@@ -86,8 +79,6 @@ func (r RedisMasterServer) ReplicaInfo() ReplicaInfo {
 func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn) error {
 	command, args, commandInput := cmp.Command, cmp.Args, cmp.Input
 	respCommand := RespCommands[command]
-
-	fmt.Println("command input", commandInput)
 
 	// TODO: find a different way of avoiding circular references instead of using a pointer here
 	r.history.Append(CommandHistoryItem{&respCommand, args, false, 0})
@@ -165,16 +156,6 @@ func (r *RedisMasterServer) SetAcknowledgeItem(historyItem *CommandHistoryItem, 
 
 func (r *RedisMasterServer) GetRDBConfig() map[string]string {
 	return r.rdbConfig
-}
-
-func (r *RedisMasterServer) GetXReadBlock() XReadBlock {
-	return r.xReadBlock
-}
-
-func (r *RedisMasterServer) SetXReadBlock(key, id, status string) {
-	r.xReadBlock.key = key
-	r.xReadBlock.id = id
-	r.xReadBlock.status = status
 }
 
 func (r *RedisMasterServer) propagateCommand(rawInput string /* historyItem *CommandHistoryItem */) []error {

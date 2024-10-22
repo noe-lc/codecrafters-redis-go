@@ -33,7 +33,6 @@ type RedisSlaveServer struct {
 	rdbFile          []byte
 	offset           int
 	rdbConfig        map[string]string
-	xReadBlock       XReadBlock
 }
 
 func NewSlaveServer(port int, replicaOf string) (RedisSlaveServer, error) {
@@ -186,16 +185,6 @@ func (r *RedisSlaveServer) RunCommandSilently(cmp CommandComponents) error {
 
 func (r *RedisSlaveServer) GetRDBConfig() map[string]string {
 	return r.rdbConfig
-}
-
-func (r *RedisSlaveServer) GetXReadBlock() XReadBlock {
-	return r.xReadBlock
-}
-
-func (r *RedisSlaveServer) SetXReadBlock(key, id, status string) {
-	r.xReadBlock.key = key
-	r.xReadBlock.id = id
-	r.xReadBlock.status = status
 }
 
 func (r *RedisSlaveServer) acceptConnections(l net.Listener) error {

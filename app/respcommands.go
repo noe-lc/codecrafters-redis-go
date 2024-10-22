@@ -348,16 +348,10 @@ var (
 			switch {
 			case isSimpleStream:
 				key, idArg := args[0], args[1]
-				blockedStream := rs.GetXReadBlock()
-				hasBlock := key == blockedStream.key // && idArg == blockedStream.id
 				newId, err := GenerateStreamId(key, idArg)
 				if err != nil {
 					return ToRespError(err), nil
 				}
-				if hasBlock {
-					return ToRespBulkString(newId), nil
-				}
-
 				Memory.AddStreamItem(key, NewStreamItem(newId, args[2:]))
 				return ToRespBulkString(newId), nil
 			default:
@@ -381,11 +375,10 @@ var (
 			}
 
 			stream := *(value.(*StreamValue))
-			streamItemsMatched := []StreamItem{}
+			streamItemsMatched := []Stream{}
 			if endId == XRANGE_PLUS {
 				for i, item := range stream {
-					itemId := item["id"].(string)
-					if itemId >= startId {
+					if item.id >= startId {
 						streamItemsMatched = stream[i:]
 						break
 					}
@@ -393,7 +386,7 @@ var (
 			} else {
 				endId = endId + "-9" // append -9 as suffix to ensure every id is within range
 				for _, item := range stream {
-					itemId := item["id"].(string)
+					itemId := item.id
 					if startId <= itemId && endId >= itemId {
 						streamItemsMatched = append(streamItemsMatched, item)
 					}
@@ -408,13 +401,11 @@ var (
 	}
 	XRead = RespCommand{
 		Execute: func(args []string, rs RedisServer) (string, error) {
-			return NULL_BULK_STRING, nil
 			concatArgs := strings.Join(args, " ")
 			blockRegex := `^block \d+ streams \w+ (([0-9]+-([0-9]|\*))+|\*{1})$`
 			streamReadRegex := `^streams (\w+ )+((([0-9]+-([0-9]|\*))+|\*{1}) )*(([0-9]+-([0-9]|\*))+|\*{1})$`
-			blockedStream := rs.GetXReadBlock()
 			numKeys := len(args[1:]) / 2
-			streamItemsMatched := []StreamItem{}
+			streamItemsMatched := []Stream{}
 			idStreamItemsStr := ARRAY + strconv.Itoa(numKeys) + PROTOCOL_TERMINATOR
 			isBlockRead, _ := regexp.MatchString(blockRegex, concatArgs)
 			isSimpleRead, _ := regexp.MatchString(streamReadRegex, concatArgs)
@@ -423,17 +414,13 @@ var (
 				for keyIndex := 1; keyIndex <= numKeys; keyIndex++ {
 					idIndex := numKeys + keyIndex
 					key, id := args[keyIndex], args[idIndex]
-					if key == blockedStream.key && blockedStream.status == XREAD_FREE {
-						return NULL_BULK_STRING, nil
-					}
 					stream, err := Memory.LookupStream(key)
 					if err != nil {
-						return "", err
+						return NULL_BULK_STRING, err
 					}
 
 					for i, item := range stream {
-						itemId := item["id"].(string)
-						if itemId > id {
+						if item.id > id {
 							streamItemsMatched = stream[i:]
 							break
 						}
@@ -448,34 +435,28 @@ var (
 
 			if isBlockRead {
 				blockMsStr, key, id := args[1], args[3], args[4]
+				blockMs, err := time.ParseDuration(blockMsStr + "ms")
+				if err != nil {
+					return "", err
+				}
+				duration := time.Duration(blockMs.Milliseconds()) * time.Millisecond
+				// timeLimit := time.Now().Add(duration).UnixMilli()
+
+				time.Sleep(duration)
 				stream, err := Memory.LookupStream(key)
 				if err != nil {
 					return "", err
 				}
-				blockMs, err := strconv.Atoi(blockMsStr)
+				_, index, err := stream.LookupItem(id)
+				if len(stream) <= index+1 {
+					return NULL_BULK_STRING, nil
+				}
+				streamItem := stream[index+1]
 				if err != nil {
-					return "", err
+					return NULL_BULK_STRING, nil
 				}
-
-				hasBlock := key == blockedStream.key // && idArg == blockedStream.id
-				if hasBlock {
-					streamItem, err := stream.LookupItem(id)
-					if err != nil {
-						return NULL_BULK_STRING, nil
-					}
-					respResponse := ARRAY + "1" + PROTOCOL_TERMINATOR + ARRAY + "2" + PROTOCOL_TERMINATOR + strconv.Itoa(len(key)) + PROTOCOL_TERMINATOR + key + PROTOCOL_TERMINATOR + StreamItemsToRespArray([]StreamItem{streamItem})
-					return respResponse, nil
-				}
-
-				rs.SetXReadBlock(key, id, "")
-
-				fmt.Println("blocking for ms: ", blockMs)
-
-				go func() {
-					time.Sleep(time.Duration(blockMs) * time.Millisecond)
-					fmt.Println("end sleep")
-					rs.SetXReadBlock("", "", "")
-				}()
+				respResponse := ARRAY + "1" + PROTOCOL_TERMINATOR + ARRAY + "2" + PROTOCOL_TERMINATOR + BULK_STRING + strconv.Itoa(len(key)) + PROTOCOL_TERMINATOR + key + PROTOCOL_TERMINATOR + StreamItemsToRespArray([]Stream{streamItem})
+				return respResponse, nil
 			}
 
 			return "", nil
