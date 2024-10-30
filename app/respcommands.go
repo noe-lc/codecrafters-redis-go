@@ -439,10 +439,14 @@ var (
 				if err != nil {
 					return "", err
 				}
-				duration := time.Duration(blockMs.Milliseconds()) * time.Millisecond
-				// timeLimit := time.Now().Add(duration).UnixMilli()
 
-				time.Sleep(duration)
+				if blockMs > 0 {
+					duration := time.Duration(blockMs.Milliseconds()) * time.Millisecond
+					time.Sleep(duration)
+				} else {
+
+				}
+
 				stream, err := Memory.LookupStream(key)
 				if err != nil {
 					return "", err
