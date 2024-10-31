@@ -352,7 +352,17 @@ var (
 				if err != nil {
 					return ToRespError(err), nil
 				}
-				Memory.AddStreamItem(key, NewStreamItem(newId, args[2:]))
+
+				streamItem := NewStreamItem(newId, args[2:])
+
+				Memory.AddStreamItem(key, streamItem)
+
+				status := rs.GetStatus()
+				fmt.Println("status in XADD", status.XReadBlock)
+				if status.XReadBlock != nil {
+					status.XReadBlock <- true
+				}
+
 				return ToRespBulkString(newId), nil
 			default:
 				fmt.Println("unrecognized XADD args")
@@ -435,15 +445,19 @@ var (
 
 			if isBlockRead {
 				blockMsStr, key, id := args[1], args[3], args[4]
-				blockMs, err := time.ParseDuration(blockMsStr + "ms")
+				blockTime, err := time.ParseDuration(blockMsStr + "ms")
 				if err != nil {
 					return "", err
 				}
 
-				if blockMs > 0 {
-					duration := time.Duration(blockMs.Milliseconds()) * time.Millisecond
-					time.Sleep(duration)
+				status := rs.GetStatus()
+				status.XReadBlock = make(chan bool)
+
+				if blockTime == 0 {
+					<-status.XReadBlock
 				} else {
+					duration := time.Duration(blockTime.Milliseconds()) * time.Millisecond
+					time.Sleep(duration)
 
 				}
 
@@ -459,8 +473,10 @@ var (
 				if err != nil {
 					return NULL_BULK_STRING, nil
 				}
-				respResponse := ARRAY + "1" + PROTOCOL_TERMINATOR + ARRAY + "2" + PROTOCOL_TERMINATOR + BULK_STRING + strconv.Itoa(len(key)) + PROTOCOL_TERMINATOR + key + PROTOCOL_TERMINATOR + StreamItemsToRespArray([]Stream{streamItem})
-				return respResponse, nil
+
+				status.XReadBlock = nil
+
+				return ARRAY + "1" + PROTOCOL_TERMINATOR + ARRAY + "2" + PROTOCOL_TERMINATOR + BULK_STRING + strconv.Itoa(len(key)) + PROTOCOL_TERMINATOR + key + PROTOCOL_TERMINATOR + StreamItemsToRespArray([]Stream{streamItem}), nil
 			}
 
 			return "", nil

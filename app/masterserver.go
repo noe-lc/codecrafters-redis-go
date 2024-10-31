@@ -25,6 +25,7 @@ type RedisMasterServer struct {
 	replicaInfo ReplicaInfo
 	history     CommandHistory
 	rdbConfig   map[string]string
+	Status      ServerStatus
 }
 
 // additional statuses for XREAD blocks
@@ -156,6 +157,10 @@ func (r *RedisMasterServer) SetAcknowledgeItem(historyItem *CommandHistoryItem, 
 
 func (r *RedisMasterServer) GetRDBConfig() map[string]string {
 	return r.rdbConfig
+}
+
+func (r *RedisMasterServer) GetStatus() *ServerStatus {
+	return &r.Status
 }
 
 func (r *RedisMasterServer) propagateCommand(rawInput string /* historyItem *CommandHistoryItem */) []error {

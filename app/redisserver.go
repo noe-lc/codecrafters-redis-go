@@ -23,11 +23,16 @@ const (
 	REPLICA_ID_LENGTH = 40
 )
 
+type ServerStatus struct {
+	XReadBlock chan bool
+}
+
 type RedisServer interface {
 	Start() error
 	ReplicaInfo() ReplicaInfo
 	RunCommand(cmp CommandComponents, conn net.Conn) error
 	GetRDBConfig() map[string]string
+	GetStatus() *ServerStatus
 }
 
 func CreateRedisServer(port int, replicaOf string, rdbDir, rdbFileName string) (RedisServer, error) {

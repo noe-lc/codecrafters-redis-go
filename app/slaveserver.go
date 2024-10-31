@@ -27,6 +27,7 @@ type RedisSlaveServer struct {
 	Host             string
 	Port             int
 	MasterPort       int
+	Status           ServerStatus
 	listener         net.Listener
 	masterConnection net.Conn
 	replicaInfo      ReplicaInfo
@@ -185,6 +186,10 @@ func (r *RedisSlaveServer) RunCommandSilently(cmp CommandComponents) error {
 
 func (r *RedisSlaveServer) GetRDBConfig() map[string]string {
 	return r.rdbConfig
+}
+
+func (r *RedisSlaveServer) GetStatus() *ServerStatus {
+	return &r.Status
 }
 
 func (r *RedisSlaveServer) acceptConnections(l net.Listener) error {
