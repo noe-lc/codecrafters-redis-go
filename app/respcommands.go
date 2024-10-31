@@ -358,7 +358,6 @@ var (
 				Memory.AddStreamItem(key, streamItem)
 
 				status := rs.GetStatus()
-				fmt.Println("status in XADD", status.XReadBlock)
 				if status.XReadBlock != nil {
 					status.XReadBlock <- true
 				}
@@ -412,7 +411,7 @@ var (
 	XRead = RespCommand{
 		Execute: func(args []string, rs RedisServer) (string, error) {
 			concatArgs := strings.Join(args, " ")
-			blockRegex := `^block \d+ streams \w+ (([0-9]+-([0-9]|\*))+|\*{1})$`
+			blockRegex := `^block \d+ streams \w+ (([0-9]+-([0-9]|\*))+|\*{1}|\${1})$`
 			streamReadRegex := `^streams (\w+ )+((([0-9]+-([0-9]|\*))+|\*{1}) )*(([0-9]+-([0-9]|\*))+|\*{1})$`
 			numKeys := len(args[1:]) / 2
 			streamItemsMatched := []Stream{}
@@ -450,7 +449,17 @@ var (
 					return "", err
 				}
 
+				stream, err := Memory.LookupStream(key)
+				if err != nil {
+					return "", err
+				}
+				lastKnownIndex := len(stream)
+				if lastKnownIndex > 0 {
+					lastKnownIndex -= 1
+				}
+
 				status := rs.GetStatus()
+				// onlyNewReads := strings.HasSuffix(concatArgs, XREAD_ONLY_NEW)
 
 				if blockTime == 0 {
 					status.XReadBlock = make(chan bool)
@@ -458,24 +467,27 @@ var (
 				} else {
 					duration := time.Duration(blockTime.Milliseconds()) * time.Millisecond
 					time.Sleep(duration)
-
 				}
 
-				stream, err := Memory.LookupStream(key)
-				if err != nil {
-					return "", err
+				var index int
+
+				if id == XREAD_ONLY_NEW {
+					index = lastKnownIndex
+				} else {
+					_, index, err = stream.LookupItem(id)
+					if err != nil {
+						return "", err
+					}
 				}
-				_, index, err := stream.LookupItem(id)
+
+				stream, _ = Memory.LookupStream(key)
 				if len(stream) <= index+1 {
-					return NULL_BULK_STRING, nil
-				}
-				streamItem := stream[index+1]
-				if err != nil {
 					return NULL_BULK_STRING, nil
 				}
 
 				status.XReadBlock = nil
 
+				streamItem := stream[index+1]
 				return ARRAY + "1" + PROTOCOL_TERMINATOR + ARRAY + "2" + PROTOCOL_TERMINATOR + BULK_STRING + strconv.Itoa(len(key)) + PROTOCOL_TERMINATOR + key + PROTOCOL_TERMINATOR + StreamItemsToRespArray([]Stream{streamItem}), nil
 			}
 

@@ -13,6 +13,7 @@ const (
 	ACK                     = "ACK"
 	GETACK                  = "GETACK"
 	GETACK_FROM_REPLICA_ARG = "*"
+	XREAD_ONLY_NEW          = "$"
 )
 
 // RESP protocol constants. Use for interpreted strings, and regex only if characters are not escaped
