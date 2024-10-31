@@ -451,9 +451,9 @@ var (
 				}
 
 				status := rs.GetStatus()
-				status.XReadBlock = make(chan bool)
 
 				if blockTime == 0 {
+					status.XReadBlock = make(chan bool)
 					<-status.XReadBlock
 				} else {
 					duration := time.Duration(blockTime.Milliseconds()) * time.Millisecond
