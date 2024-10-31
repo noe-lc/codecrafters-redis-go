@@ -17,6 +17,7 @@ var (
 
 // memory item types
 const (
+	INT    = "int"
 	STRING = "string"
 	STREAM = "stream"
 )
@@ -96,11 +97,16 @@ func (c *MemoryItem) ToRespString() (string, error) {
 	case STREAM:
 		stream := value.(*StreamValue)
 		streamRespArray := StreamItemsToRespArray(*stream)
-		fmt.Println("stream array: ", streamRespArray)
 		return streamRespArray, nil
 	default:
 		return "", nil
 	}
+}
+
+type IntegerValue int
+
+func (s *IntegerValue) getValue() (interface{}, string) {
+	return s, INT
 }
 
 type StringValue string

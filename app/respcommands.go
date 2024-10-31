@@ -28,6 +28,7 @@ const (
 	XADD     = "XADD"
 	XRANGE   = "XRANGE"
 	XREAD    = "XREAD"
+	INCR     = "INCR"
 )
 
 // Command types
@@ -98,7 +99,7 @@ var (
 				argMap[command] = append(argMap[command], arg)
 			}
 
-			key, value := argMap[SET][0], argMap[SET][1]
+			key, stringValueArg := argMap[SET][0], argMap[SET][1]
 			expArgs, exists := argMap["PX"]
 			expiry := "0"
 
@@ -113,9 +114,19 @@ var (
 			if expiresInMs != 0 {
 				itemExpires = time.Now().UnixMilli() + int64(expiresInMs)
 			}
-			str := StringValue(value)
 
-			Memory[key] = MemoryItem{&str, itemExpires}
+			var memoryItemValue MemoryItemValue
+			numericValue, err := strconv.Atoi(stringValueArg)
+			if err == nil {
+				value := IntegerValue(numericValue)
+				memoryItemValue = &value
+			} else {
+				value := StringValue(stringValueArg)
+				memoryItemValue = &value
+
+			}
+
+			Memory[key] = MemoryItem{memoryItemValue, itemExpires}
 			return ToRespSimpleString("OK"), nil
 		},
 	}
@@ -491,6 +502,11 @@ var (
 				return ARRAY + "1" + PROTOCOL_TERMINATOR + ARRAY + "2" + PROTOCOL_TERMINATOR + BULK_STRING + strconv.Itoa(len(key)) + PROTOCOL_TERMINATOR + key + PROTOCOL_TERMINATOR + StreamItemsToRespArray([]Stream{streamItem}), nil
 			}
 
+			return "", nil
+		},
+	}
+	Incr = RespCommand{
+		Execute: func(s []string, rs RedisServer) (string, error) {
 			return "", nil
 		},
 	}
