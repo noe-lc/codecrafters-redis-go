@@ -250,10 +250,10 @@ var (
 		Execute: func(args []string, server RedisServer) (string, error) {
 			masterServer, ok := server.(*RedisMasterServer)
 			if !ok {
-				return ToRespInteger("0"), nil
+				return ToRespInteger(0), nil
 			}
 			if len(masterServer.replicas) < 1 {
-				return ToRespInteger("0"), nil
+				return ToRespInteger(0), nil
 			}
 			numberOfReplicas, err := strconv.Atoi(args[0])
 			if err != nil {
@@ -267,8 +267,7 @@ var (
 			prevHistoryItem := masterServer.history.GetModifiableEntry(len(masterServer.history) - 2)
 
 			if prevHistoryItem.RespCommand.Type != WRITE {
-				numberOfReplicas := strconv.Itoa(len(masterServer.replicas))
-				return ToRespInteger(numberOfReplicas), nil
+				return ToRespInteger(len(masterServer.replicas)), nil
 			}
 
 			ackChan := make(chan bool)
@@ -290,12 +289,12 @@ var (
 				case <-ackChan:
 					if masterServer.waitAckFor.Acks == numberOfReplicas {
 						masterServer.SetAcknowledgeItem(nil, nil)
-						return ToRespInteger(strconv.Itoa(numberOfReplicas)), nil
+						return ToRespInteger(numberOfReplicas), nil
 					}
 				case <-timer:
 					lastAcksRead := masterServer.waitAckFor.Acks
 					masterServer.SetAcknowledgeItem(nil, nil)
-					return ToRespInteger(strconv.Itoa(lastAcksRead)), nil
+					return ToRespInteger(lastAcksRead), nil
 				}
 			}
 
@@ -506,8 +505,24 @@ var (
 		},
 	}
 	Incr = RespCommand{
-		Execute: func(s []string, rs RedisServer) (string, error) {
-			return "", nil
+		Execute: func(args []string, rs RedisServer) (string, error) {
+			memItem, exists := Memory[args[0]]
+
+			if !exists {
+				return "", errors.New("key does not exist")
+			}
+
+			value, valueType := memItem.GetValueDirectly()
+
+			if valueType != INT {
+				return "", errors.New("cannot increment non-integer value")
+			}
+
+			integerValue := value.(*IntegerValue)
+			updatedInt := int(*integerValue) + 1
+			*integerValue = IntegerValue(updatedInt)
+			Memory[args[0]] = MemoryItem{integerValue, memItem.expires}
+			return ToRespInteger(updatedInt), nil
 		},
 	}
 )
@@ -527,6 +542,7 @@ var RespCommands = map[string]RespCommand{
 	XADD:     XAdd,
 	XRANGE:   XRange,
 	XREAD:    XRead,
+	INCR:     Incr,
 }
 
 var CommandFlags = map[string]string{

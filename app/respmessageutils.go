@@ -108,7 +108,9 @@ func StreamItemsToRespArray(s []Stream) string {
 	return respArray
 }
 
-func ToRespInteger(intString string) string {
+func ToRespInteger(i int) string {
+	intString := strconv.Itoa(i)
+
 	if strings.HasPrefix(intString, INTEGER_NEGATIVE) {
 		return INTEGER + INTEGER_POSITIVE + intString + PROTOCOL_TERMINATOR
 	}
