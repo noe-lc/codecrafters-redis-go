@@ -360,7 +360,7 @@ var (
 				key, idArg := args[0], args[1]
 				newId, err := GenerateStreamId(key, idArg)
 				if err != nil {
-					return "", errors.New(ToRespError(err))
+					return ToRespError(err), nil
 				}
 
 				streamItem := NewStreamItem(newId, args[2:])
@@ -519,7 +519,7 @@ var (
 
 			if valueType != INT {
 				err := errors.New("value is not an error or out of range")
-				return "", errors.New(ToRespError(err))
+				return ToRespError(err), nil
 			}
 
 			integerValue := value.(*IntegerValue)
