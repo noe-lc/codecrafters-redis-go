@@ -519,7 +519,7 @@ var (
 			value, valueType := memItem.GetValueDirectly()
 
 			if valueType != INT {
-				err := errors.New("value is not an error or out of range")
+				err := errors.New("value is not an integer or out of range")
 				return ToRespError(err), nil
 			}
 
