@@ -360,7 +360,8 @@ var (
 				key, idArg := args[0], args[1]
 				newId, err := GenerateStreamId(key, idArg)
 				if err != nil {
-					return ToRespError(err), nil
+					msg := CapitalizeFirstCharacter(err.Error())
+					return ToRespError(errors.New(msg)), nil
 				}
 
 				streamItem := NewStreamItem(newId, args[2:])

@@ -92,7 +92,3 @@ var (
 	RDB_TIMESTAMP_MILLIS_BYTE, _    = RDBHexStringToByte(RDB_TIMESTAMP_MILLIS)
 	RDB_TIMESTAMP_SECONDS_BYTE, _   = RDBHexStringToByte(RDB_TIMESTAMP_SECONDS)
 )
-
-// byte1
-//    1 2 3 4 5 6
-//    ^ - - u u u

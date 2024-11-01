@@ -5,7 +5,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 )
 
 func extractCommandAndArgs(message string) (string, []string) {
@@ -119,10 +118,7 @@ func ToRespInteger(i int) string {
 }
 
 func ToRespError(err error) string {
-	msg := err.Error()
-	_, size := utf8.DecodeRuneInString(msg)
-	msg = strings.ToUpper(msg[:size]) + msg[size:]
-	return ERROR + " " + msg + PROTOCOL_TERMINATOR
+	return ERROR + " " + err.Error() + PROTOCOL_TERMINATOR
 }
 
 func BuildPsyncResponse(masterId string) string {
