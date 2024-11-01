@@ -506,10 +506,13 @@ var (
 	}
 	Incr = RespCommand{
 		Execute: func(args []string, rs RedisServer) (string, error) {
-			memItem, exists := Memory[args[0]]
+			key := args[0]
+			memItem, exists := Memory[key]
 
 			if !exists {
-				return "", errors.New("key does not exist")
+				integerValue := IntegerValue(1)
+				Memory[key] = MemoryItem{&integerValue, 0}
+				return ToRespInteger(1), nil
 			}
 
 			value, valueType := memItem.GetValueDirectly()
@@ -521,7 +524,7 @@ var (
 			integerValue := value.(*IntegerValue)
 			updatedInt := int(*integerValue) + 1
 			*integerValue = IntegerValue(updatedInt)
-			Memory[args[0]] = MemoryItem{integerValue, memItem.expires}
+			Memory[key] = MemoryItem{integerValue, memItem.expires}
 			return ToRespInteger(updatedInt), nil
 		},
 	}
