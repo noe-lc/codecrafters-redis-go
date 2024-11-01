@@ -360,7 +360,7 @@ var (
 				key, idArg := args[0], args[1]
 				newId, err := GenerateStreamId(key, idArg)
 				if err != nil {
-					return ToRespError(err), nil
+					return "", errors.New(ToRespError(err))
 				}
 
 				streamItem := NewStreamItem(newId, args[2:])
@@ -518,7 +518,8 @@ var (
 			value, valueType := memItem.GetValueDirectly()
 
 			if valueType != INT {
-				return "", errors.New("cannot increment non-integer value")
+				err := errors.New("value is not an error or out of range")
+				return "", errors.New(ToRespError(err))
 			}
 
 			integerValue := value.(*IntegerValue)
