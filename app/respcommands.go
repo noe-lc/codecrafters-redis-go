@@ -30,6 +30,7 @@ const (
 	XREAD    = "XREAD"
 	INCR     = "INCR"
 	MULTI    = "MULTI"
+	EXEC     = "EXEC"
 )
 
 // Command types --
@@ -536,6 +537,11 @@ var (
 			return ToRespSimpleString(OK), nil
 		},
 	}
+	Exec = RespCommand{
+		Execute: func(args []string, rs RedisServer) (string, error) {
+			return ToRespError(fmt.Errorf("%s without %s", EXEC, MULTI)), nil
+		},
+	}
 )
 
 var RespCommands = map[string]RespCommand{
@@ -555,6 +561,7 @@ var RespCommands = map[string]RespCommand{
 	XREAD:    XRead,
 	INCR:     Incr,
 	MULTI:    Multi,
+	EXEC:     Exec,
 }
 
 var CommandFlags = map[string]string{
