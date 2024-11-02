@@ -32,7 +32,7 @@ const (
 	MULTI    = "MULTI"
 )
 
-// Command types
+// Command types --
 const (
 	READ  = "READ"
 	WRITE = "WRITE"
