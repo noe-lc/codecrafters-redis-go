@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 )
 
@@ -17,6 +18,7 @@ var (
 
 // memory item types
 const (
+	INT    = "int"
 	STRING = "string"
 	STREAM = "stream"
 )
@@ -87,20 +89,29 @@ func (c *MemoryItem) GetValueDirectly() (interface{}, string) {
 
 // ToRespString transforms the value into the required response RESP string.
 // It receives the same list of arguments as the command does on each RespCommand Execute call.
-func (c *MemoryItem) ToRespString() (string, error) {
-	value, valueType := c.GetValueDirectly()
+func (m *MemoryItem) ToRespString() (string, error) {
+	value, valueType := m.GetValueDirectly()
 	switch valueType {
 	case STRING:
 		stringValue := value.(*StringValue)
 		return ToRespBulkString(string(*stringValue)), nil
+	case INT:
+		integerValue := value.(*IntegerValue)
+		intStr := strconv.Itoa(int(*integerValue))
+		return ToRespBulkString(intStr), nil
 	case STREAM:
 		stream := value.(*StreamValue)
 		streamRespArray := StreamItemsToRespArray(*stream)
-		fmt.Println("stream array: ", streamRespArray)
 		return streamRespArray, nil
 	default:
-		return "", nil
+		return "", fmt.Errorf("cannot convert type to resp string")
 	}
+}
+
+type IntegerValue int
+
+func (s *IntegerValue) getValue() (interface{}, string) {
+	return s, INT
 }
 
 type StringValue string

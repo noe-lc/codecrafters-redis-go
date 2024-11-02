@@ -28,6 +28,7 @@ const (
 	XADD     = "XADD"
 	XRANGE   = "XRANGE"
 	XREAD    = "XREAD"
+	INCR     = "INCR"
 	MULTI    = "MULTI"
 )
 
@@ -99,7 +100,7 @@ var (
 				argMap[command] = append(argMap[command], arg)
 			}
 
-			key, value := argMap[SET][0], argMap[SET][1]
+			key, stringValueArg := argMap[SET][0], argMap[SET][1]
 			expArgs, exists := argMap["PX"]
 			expiry := "0"
 
@@ -114,9 +115,19 @@ var (
 			if expiresInMs != 0 {
 				itemExpires = time.Now().UnixMilli() + int64(expiresInMs)
 			}
-			str := StringValue(value)
 
-			Memory[key] = MemoryItem{&str, itemExpires}
+			var memoryItemValue MemoryItemValue
+			numericValue, err := strconv.Atoi(stringValueArg)
+			if err == nil {
+				value := IntegerValue(numericValue)
+				memoryItemValue = &value
+			} else {
+				value := StringValue(stringValueArg)
+				memoryItemValue = &value
+
+			}
+
+			Memory[key] = MemoryItem{memoryItemValue, itemExpires}
 			return ToRespSimpleString("OK"), nil
 		},
 	}
@@ -240,10 +251,10 @@ var (
 		Execute: func(args []string, server RedisServer) (string, error) {
 			masterServer, ok := server.(*RedisMasterServer)
 			if !ok {
-				return ToRespInteger("0"), nil
+				return ToRespInteger(0), nil
 			}
 			if len(masterServer.replicas) < 1 {
-				return ToRespInteger("0"), nil
+				return ToRespInteger(0), nil
 			}
 			numberOfReplicas, err := strconv.Atoi(args[0])
 			if err != nil {
@@ -257,8 +268,7 @@ var (
 			prevHistoryItem := masterServer.history.GetModifiableEntry(len(masterServer.history) - 2)
 
 			if prevHistoryItem.RespCommand.Type != WRITE {
-				numberOfReplicas := strconv.Itoa(len(masterServer.replicas))
-				return ToRespInteger(numberOfReplicas), nil
+				return ToRespInteger(len(masterServer.replicas)), nil
 			}
 
 			ackChan := make(chan bool)
@@ -280,12 +290,12 @@ var (
 				case <-ackChan:
 					if masterServer.waitAckFor.Acks == numberOfReplicas {
 						masterServer.SetAcknowledgeItem(nil, nil)
-						return ToRespInteger(strconv.Itoa(numberOfReplicas)), nil
+						return ToRespInteger(numberOfReplicas), nil
 					}
 				case <-timer:
 					lastAcksRead := masterServer.waitAckFor.Acks
 					masterServer.SetAcknowledgeItem(nil, nil)
-					return ToRespInteger(strconv.Itoa(lastAcksRead)), nil
+					return ToRespInteger(lastAcksRead), nil
 				}
 			}
 
@@ -351,7 +361,8 @@ var (
 				key, idArg := args[0], args[1]
 				newId, err := GenerateStreamId(key, idArg)
 				if err != nil {
-					return ToRespError(err), nil
+					msg := CapitalizeFirstCharacter(err.Error())
+					return ToRespError(errors.New(msg)), nil
 				}
 
 				streamItem := NewStreamItem(newId, args[2:])
@@ -359,7 +370,6 @@ var (
 				Memory.AddStreamItem(key, streamItem)
 
 				status := rs.GetStatus()
-				fmt.Println("status in XADD", status.XReadBlock)
 				if status.XReadBlock != nil {
 					status.XReadBlock <- true
 				}
@@ -413,7 +423,7 @@ var (
 	XRead = RespCommand{
 		Execute: func(args []string, rs RedisServer) (string, error) {
 			concatArgs := strings.Join(args, " ")
-			blockRegex := `^block \d+ streams \w+ (([0-9]+-([0-9]|\*))+|\*{1})$`
+			blockRegex := `^block \d+ streams \w+ (([0-9]+-([0-9]|\*))+|\*{1}|\${1})$`
 			streamReadRegex := `^streams (\w+ )+((([0-9]+-([0-9]|\*))+|\*{1}) )*(([0-9]+-([0-9]|\*))+|\*{1})$`
 			numKeys := len(args[1:]) / 2
 			streamItemsMatched := []Stream{}
@@ -451,36 +461,74 @@ var (
 					return "", err
 				}
 
-				status := rs.GetStatus()
-				status.XReadBlock = make(chan bool)
-
-				if blockTime == 0 {
-					<-status.XReadBlock
-				} else {
-					duration := time.Duration(blockTime.Milliseconds()) * time.Millisecond
-					time.Sleep(duration)
-
-				}
-
 				stream, err := Memory.LookupStream(key)
 				if err != nil {
 					return "", err
 				}
-				_, index, err := stream.LookupItem(id)
-				if len(stream) <= index+1 {
-					return NULL_BULK_STRING, nil
+				lastKnownIndex := len(stream)
+				if lastKnownIndex > 0 {
+					lastKnownIndex -= 1
 				}
-				streamItem := stream[index+1]
-				if err != nil {
+
+				status := rs.GetStatus()
+				// onlyNewReads := strings.HasSuffix(concatArgs, XREAD_ONLY_NEW)
+
+				if blockTime == 0 {
+					status.XReadBlock = make(chan bool)
+					<-status.XReadBlock
+				} else {
+					duration := time.Duration(blockTime.Milliseconds()) * time.Millisecond
+					time.Sleep(duration)
+				}
+
+				var index int
+
+				if id == XREAD_ONLY_NEW {
+					index = lastKnownIndex
+				} else {
+					_, index, err = stream.LookupItem(id)
+					if err != nil {
+						return "", err
+					}
+				}
+
+				stream, _ = Memory.LookupStream(key)
+				if len(stream) <= index+1 {
 					return NULL_BULK_STRING, nil
 				}
 
 				status.XReadBlock = nil
 
+				streamItem := stream[index+1]
 				return ARRAY + "1" + PROTOCOL_TERMINATOR + ARRAY + "2" + PROTOCOL_TERMINATOR + BULK_STRING + strconv.Itoa(len(key)) + PROTOCOL_TERMINATOR + key + PROTOCOL_TERMINATOR + StreamItemsToRespArray([]Stream{streamItem}), nil
 			}
 
 			return "", nil
+		},
+	}
+	Incr = RespCommand{
+		Execute: func(args []string, rs RedisServer) (string, error) {
+			key := args[0]
+			memItem, exists := Memory[key]
+
+			if !exists {
+				integerValue := IntegerValue(1)
+				Memory[key] = MemoryItem{&integerValue, 0}
+				return ToRespInteger(1), nil
+			}
+
+			value, valueType := memItem.GetValueDirectly()
+
+			if valueType != INT {
+				err := errors.New("value is not an integer or out of range")
+				return ToRespError(err), nil
+			}
+
+			integerValue := value.(*IntegerValue)
+			updatedInt := int(*integerValue) + 1
+			*integerValue = IntegerValue(updatedInt)
+			Memory[key] = MemoryItem{integerValue, memItem.expires}
+			return ToRespInteger(updatedInt), nil
 		},
 	}
 	Multi = RespCommand{
@@ -505,6 +553,7 @@ var RespCommands = map[string]RespCommand{
 	XADD:     XAdd,
 	XRANGE:   XRange,
 	XREAD:    XRead,
+	INCR:     Incr,
 	MULTI:    Multi,
 }
 

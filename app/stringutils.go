@@ -3,6 +3,7 @@ package main
 import (
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 func CamelCaseToSnakeCase(input string) string {
@@ -16,4 +17,13 @@ func CamelCaseToSnakeCase(input string) string {
 		snakeCaseString += string(r)
 	}
 	return strings.ToLower(snakeCaseString)
+}
+
+func CapitalizeFirstCharacter(s string) string {
+	if s == "" {
+		return s
+	}
+
+	_, size := utf8.DecodeRuneInString(s)
+	return strings.ToUpper(s[:size]) + s[size:]
 }
