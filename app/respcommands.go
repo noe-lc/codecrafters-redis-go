@@ -28,6 +28,7 @@ const (
 	XADD     = "XADD"
 	XRANGE   = "XRANGE"
 	XREAD    = "XREAD"
+	MULTI    = "MULTI"
 )
 
 // Command types
@@ -482,6 +483,11 @@ var (
 			return "", nil
 		},
 	}
+	Multi = RespCommand{
+		Execute: func(args []string, rs RedisServer) (string, error) {
+			return ToRespSimpleString(OK), nil
+		},
+	}
 )
 
 var RespCommands = map[string]RespCommand{
@@ -499,6 +505,7 @@ var RespCommands = map[string]RespCommand{
 	XADD:     XAdd,
 	XRANGE:   XRange,
 	XREAD:    XRead,
+	MULTI:    Multi,
 }
 
 var CommandFlags = map[string]string{
