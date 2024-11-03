@@ -25,8 +25,6 @@ const (
 
 type ServerStatus struct {
 	XReadBlock chan bool
-	Multi      bool
-	execQueue  [](func() error)
 }
 
 type RedisServer interface {

@@ -138,8 +138,8 @@ func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn, t *
 		if t.Conn == nil {
 			result = ToRespError(fmt.Errorf("%s without %s", EXEC, MULTI))
 		} else {
-			result = ToRespArrayString([]string{}...)
-			t.Reset()
+			result = t.ExecTransaction(r)
+			fmt.Println("result", result)
 		}
 
 		_, err := conn.Write([]byte(result))

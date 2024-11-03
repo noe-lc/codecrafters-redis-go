@@ -98,7 +98,7 @@ func (m *MemoryItem) ToRespString() (string, error) {
 	case INT:
 		integerValue := value.(*IntegerValue)
 		intStr := strconv.Itoa(int(*integerValue))
-		return ToRespBulkString(intStr), nil
+		return intStr, nil //  ToRespBulkString(intStr), nil
 	case STREAM:
 		stream := value.(*StreamValue)
 		streamRespArray := StreamItemsToRespArray(*stream)

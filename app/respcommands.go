@@ -534,8 +534,6 @@ var (
 	}
 	Multi = RespCommand{
 		Execute: func(args []string, rs RedisServer) (string, error) {
-			// serverStatus := rs.GetStatus()
-			// serverStatus.Multi = true
 			return ToRespSimpleString(OK), nil
 		},
 	}
