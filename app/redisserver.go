@@ -25,6 +25,7 @@ const (
 
 type ServerStatus struct {
 	XReadBlock chan bool
+	Multi      bool
 }
 
 type RedisServer interface {

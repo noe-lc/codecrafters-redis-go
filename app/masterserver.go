@@ -86,7 +86,6 @@ func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn) err
 
 	// 1. command executors produce the output to write
 	writeCommandOutput := func() error {
-		// TODO: maybe do not reply on XREAD block
 		result, err := respCommand.Execute(args, r)
 		if err != nil {
 			return err

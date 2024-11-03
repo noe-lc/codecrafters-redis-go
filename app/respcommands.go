@@ -534,12 +534,22 @@ var (
 	}
 	Multi = RespCommand{
 		Execute: func(args []string, rs RedisServer) (string, error) {
+			serverStatus := rs.GetStatus()
+			serverStatus.Multi = true
 			return ToRespSimpleString(OK), nil
 		},
 	}
 	Exec = RespCommand{
 		Execute: func(args []string, rs RedisServer) (string, error) {
-			return ToRespError(fmt.Errorf("%s without %s", EXEC, MULTI)), nil
+			serverStatus := rs.GetStatus()
+
+			if !serverStatus.Multi {
+				return ToRespError(fmt.Errorf("%s without %s", EXEC, MULTI)), nil
+			}
+
+			serverStatus.Multi = false
+			return ToRespArrayString([]string{}...), nil
+
 		},
 	}
 )
@@ -565,7 +575,6 @@ var RespCommands = map[string]RespCommand{
 }
 
 var CommandFlags = map[string]string{
-
 	"PX": "PX",
 }
 
