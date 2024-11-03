@@ -17,8 +17,9 @@ func HandleConnection(conn net.Conn, server RedisServer) {
 
 	defer conn.Close()
 
+	var trx Transaction
 	reader := bufio.NewReader(conn)
-	respProcessor := NewRESPMessageReader()
+	respReader := NewRESPMessageReader()
 
 	for {
 		message, err := reader.ReadString('\n')
@@ -32,10 +33,10 @@ func HandleConnection(conn net.Conn, server RedisServer) {
 			return
 		}
 
-		ready, err := respProcessor.Read(message)
+		ready, err := respReader.Read(message)
 		if err != nil {
 			fmt.Println("RESP Processor read error: ", err)
-			respProcessor.Reset()
+			respReader.Reset()
 
 			_, err = conn.Write([]byte(err.Error()))
 			if err != nil {
@@ -47,12 +48,13 @@ func HandleConnection(conn net.Conn, server RedisServer) {
 		}
 
 		if ready {
-			commandComponents := respProcessor.GetCommandComponents()
-			err := server.RunCommand(commandComponents, conn)
+			commandComponents := respReader.GetCommandComponents()
+			err := server.RunCommand(commandComponents, conn, &trx)
 			if err != nil {
 				fmt.Printf("Error executing command %s in %s. Error: %s\n", commandComponents.Command, server.ReplicaInfo().role, err.Error())
 			}
-			respProcessor.Reset()
+
+			respReader.Reset()
 		}
 	}
 }
@@ -61,7 +63,7 @@ func HandleHandshakeConnection(conn net.Conn, server RedisServer, reader *bufio.
 	fmt.Printf("Master connected. Remote addr: %s\n", conn.RemoteAddr())
 
 	defer conn.Close()
-	respProcessor := NewRESPMessageReader()
+	respReader := NewRESPMessageReader()
 	slaveServer, ok := server.(*RedisSlaveServer)
 
 	if !ok {
@@ -78,10 +80,10 @@ func HandleHandshakeConnection(conn net.Conn, server RedisServer, reader *bufio.
 			fmt.Println("Error reading handshake message: ", err)
 			return err
 		}
-		ready, err := respProcessor.Read(message)
+		ready, err := respReader.Read(message)
 		if err != nil {
 			LogServerError(slaveServer, "RESP Processor read error", err)
-			respProcessor.Reset()
+			respReader.Reset()
 			// TODO: do not ignore actual errors.
 			// this has been commented out so that master replies during handshake
 			// do not generate unexpected writes to slave replicas
@@ -97,12 +99,12 @@ func HandleHandshakeConnection(conn net.Conn, server RedisServer, reader *bufio.
 		}
 
 		if ready {
-			commandComponents := respProcessor.GetCommandComponents()
+			commandComponents := respReader.GetCommandComponents()
 			err := slaveServer.RunCommandSilently(commandComponents)
 			if err != nil {
 				fmt.Printf("Error executing command %s in %s. Error: %s\n", commandComponents.Command, server.ReplicaInfo().role, err.Error())
 			}
-			respProcessor.Reset()
+			respReader.Reset()
 		}
 	}
 }

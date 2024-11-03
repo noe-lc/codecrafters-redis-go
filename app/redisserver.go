@@ -26,12 +26,13 @@ const (
 type ServerStatus struct {
 	XReadBlock chan bool
 	Multi      bool
+	execQueue  [](func() error)
 }
 
 type RedisServer interface {
 	Start() error
 	ReplicaInfo() ReplicaInfo
-	RunCommand(cmp CommandComponents, conn net.Conn) error
+	RunCommand(cmp CommandComponents, conn net.Conn, trx *Transaction) error
 	GetRDBConfig() map[string]string
 	GetStatus() *ServerStatus
 }

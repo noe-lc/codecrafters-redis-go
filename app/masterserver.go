@@ -18,6 +18,7 @@ type RedisMasterServer struct {
 	Role        string
 	Host        string
 	Port        int
+	Status      ServerStatus
 	listener    net.Listener
 	waitAckFor  *CommandHistoryItem
 	ackChannel  chan bool
@@ -25,14 +26,7 @@ type RedisMasterServer struct {
 	replicaInfo ReplicaInfo
 	history     CommandHistory
 	rdbConfig   map[string]string
-	Status      ServerStatus
 }
-
-// additional statuses for XREAD blocks
-const (
-	XREAD_FREE    = "FREE"
-	XREAD_BLOCKED = "BLOCKED"
-)
 
 func NewMasterServer(port int, rdbDir, rdbFileName string) RedisMasterServer {
 	server := RedisMasterServer{
@@ -77,11 +71,10 @@ func (r RedisMasterServer) ReplicaInfo() ReplicaInfo {
 	return r.replicaInfo
 }
 
-func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn) error {
+func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn, t *Transaction) error {
 	command, args, commandInput := cmp.Command, cmp.Args, cmp.Input
 	respCommand := RespCommands[command]
 
-	// TODO: find a different way of avoiding circular references instead of using a pointer here
 	r.history.Append(CommandHistoryItem{&respCommand, args, false, 0})
 
 	// 1. command executors produce the output to write
@@ -115,7 +108,6 @@ func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn) err
 			return err
 		}
 		_, err = conn.Write(rdbFileBytes)
-		//fmt.Println("wrote", wrote)
 		if err != nil {
 			return err
 		}
@@ -123,7 +115,6 @@ func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn) err
 		r.replicas = append(r.replicas, Replica{conn})
 	case REPLCONF:
 		concatArgs := strings.Join(args, " ")
-		// REPLCONF ACK <BYTES>
 		if matches, _ := regexp.MatchString(ACK+` `+`\d+`, concatArgs); matches {
 			r.waitAckFor.Acks += 1
 			r.ackChannel <- true
@@ -134,7 +125,39 @@ func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn) err
 		if err != nil {
 			return err
 		}
+	case MULTI:
+		t.Conn = conn
+		err := writeCommandOutput()
+		if err != nil {
+			t.Reset()
+			return err
+		}
+	case EXEC:
+		result := ""
+
+		if t.Conn == nil {
+			result = ToRespError(fmt.Errorf("%s without %s", EXEC, MULTI))
+		} else {
+			result = ToRespArrayString([]string{}...)
+			t.Reset()
+		}
+
+		_, err := conn.Write([]byte(result))
+		if err != nil {
+			return err
+		}
+		return nil
 	default:
+		if t.Conn != nil {
+			t.EnqueueCommand(cmp)
+			_, err := conn.Write([]byte(ToRespSimpleString(QUEUED)))
+			if err != nil {
+				return err
+			}
+
+			return nil
+		}
+
 		err := writeCommandOutput()
 		if err != nil {
 			return err
@@ -145,7 +168,6 @@ func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn) err
 		}
 	}
 
-	// modHistoryEntry.Success = true
 	return nil
 }
 

@@ -150,7 +150,7 @@ func (r *RedisSlaveServer) runCommandInternally(cmp CommandComponents) (string, 
 }
 
 // Use for commands sent by a client which is NOT master
-func (r RedisSlaveServer) RunCommand(cmp CommandComponents, conn net.Conn) error {
+func (r RedisSlaveServer) RunCommand(cmp CommandComponents, conn net.Conn, t *Transaction) error {
 	result, _, err := r.runCommandInternally(cmp)
 	if err != nil {
 		return err
