@@ -85,16 +85,6 @@ func HandleHandshakeConnection(conn net.Conn, server RedisServer, reader *bufio.
 			LogServerError(slaveServer, "RESP Processor read error", err)
 			respReader.Reset()
 			// TODO: do not ignore actual errors.
-			// this has been commented out so that master replies during handshake
-			// do not generate unexpected writes to slave replicas
-			/*
-				_, err = conn.Write([]byte(err.Error()))
-				if err != nil {
-					fmt.Println("Error writing:", err)
-					return
-				}
-			*/
-
 			continue
 		}
 

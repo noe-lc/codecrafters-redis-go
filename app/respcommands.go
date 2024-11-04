@@ -209,7 +209,6 @@ var (
 				valueOfReplInfo := reflect.ValueOf(replicaInfo)
 				typeOfReplInfo := reflect.TypeOf(replicaInfo)
 
-				// TODO: implement a struct serializer?
 				for i := 0; i < valueOfReplInfo.NumField(); i++ {
 					field := valueOfReplInfo.Field(i)
 					fieldName := typeOfReplInfo.Field(i).Name

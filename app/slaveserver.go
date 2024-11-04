@@ -244,7 +244,6 @@ func (r *RedisSlaveServer) handshakeWithMaster(reader *bufio.Reader) error {
 		}
 
 		replConfResponse, err := BufioRead(reader, replConfResponseExpected)
-		// TODO: abstract out these checks as they will be run several times
 		if err != nil {
 			r.masterConnection.Close()
 			return err
