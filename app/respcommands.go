@@ -230,9 +230,9 @@ var (
 			switch {
 			case configRdb:
 				rdbArg := args[1]
-				return ToRespArrayString(rdbArg, server.GetRDBConfig()[rdbArg]), nil
+				return ToRespBulkStringArray(rdbArg, server.GetRDBConfig()[rdbArg]), nil
 			default:
-				return ToRespArrayString(""), nil
+				return ToRespBulkStringArray(""), nil
 			}
 		},
 	}
@@ -277,7 +277,7 @@ var (
 			masterServer.SetAcknowledgeItem(prevHistoryItem, ackChan)
 
 			for _, replica := range masterServer.replicas {
-				_, err := replica.conn.Write([]byte(ToRespArrayString(REPLCONF, GETACK, GETACK_FROM_REPLICA_ARG)))
+				_, err := replica.conn.Write([]byte(ToRespBulkStringArray(REPLCONF, GETACK, GETACK_FROM_REPLICA_ARG)))
 				if err != nil {
 					fmt.Println("Failed write GETACK to " + replica.conn.RemoteAddr().String())
 					continue
@@ -324,9 +324,9 @@ var (
 				}
 
 				fmt.Println("keys:", keys)
-				return ToRespArrayString(keys...), nil
+				return ToRespBulkStringArray(keys...), nil
 			default:
-				return ToRespArrayString(""), nil
+				return ToRespBulkStringArray(""), nil
 			}
 
 		},

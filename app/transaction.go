@@ -2,8 +2,6 @@ package main
 
 import (
 	"net"
-	"regexp"
-	"strings"
 )
 
 type Transaction struct {
@@ -23,7 +21,6 @@ func (t *Transaction) EnqueueCommand(cmp CommandComponents) {
 
 func (t *Transaction) ExecTransaction(s RedisServer) string {
 	results := []string{}
-	r := regexp.MustCompile(`[` + SIMPLE_STRING + PROTOCOL_TERMINATOR + `]|\` + BULK_STRING + `\d+`)
 	for _, cmp := range t.Queue {
 		command, args, _ := cmp.Command, cmp.Args, cmp.Input
 		respCommand := RespCommands[command]
@@ -32,16 +29,13 @@ func (t *Transaction) ExecTransaction(s RedisServer) string {
 		if err != nil {
 			results = append(results, err.Error())
 		} else {
-			// strings.TrimSuffix(result, PROTOCOL_TERMINATOR)
-			result = strings.TrimSuffix(r.ReplaceAllString(result, ""), PROTOCOL_TERMINATOR)
 			results = append(results, result)
 		}
 
 	}
 
 	t.Reset()
-
-	return ToRespArrayString(results...)
+	return ConcatIntoRespArray(results)
 }
 
 func (t *Transaction) Reset() {

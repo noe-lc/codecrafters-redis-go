@@ -136,7 +136,7 @@ func (r *RedisSlaveServer) runCommandInternally(cmp CommandComponents) (string, 
 		arg1, arg2 := cmp.Args[0], cmp.Args[1]
 		if arg1 == GETACK && arg2 == GETACK_FROM_REPLICA_ARG {
 			writeToMaster = true
-			result = ToRespArrayString(REPLCONF, ACK, strconv.Itoa(r.offset))
+			result = ToRespBulkStringArray(REPLCONF, ACK, strconv.Itoa(r.offset))
 		}
 	default:
 		result, err = RespCommands[command].Execute(args, r)
@@ -210,7 +210,7 @@ func (r *RedisSlaveServer) updateProcessedBytes(bytes int) {
 
 func (r *RedisSlaveServer) handshakeWithMaster(reader *bufio.Reader) error {
 	// * 1 - PING
-	_, err := r.masterConnection.Write([]byte(ToRespArrayString(PING)))
+	_, err := r.masterConnection.Write([]byte(ToRespBulkStringArray(PING)))
 	if err != nil {
 		return err
 	}
@@ -237,7 +237,7 @@ func (r *RedisSlaveServer) handshakeWithMaster(reader *bufio.Reader) error {
 
 	for _, replConfMessage := range replConfList {
 		messageItems := strings.Split(replConfMessage, " ")
-		message := ToRespArrayString(messageItems...)
+		message := ToRespBulkStringArray(messageItems...)
 		_, err = r.masterConnection.Write([]byte(message))
 		if err != nil {
 			return err
@@ -256,7 +256,7 @@ func (r *RedisSlaveServer) handshakeWithMaster(reader *bufio.Reader) error {
 	}
 
 	// * 3 - PSYNC
-	r.masterConnection.Write([]byte(ToRespArrayString(PSYNC, "?", "-1")))
+	r.masterConnection.Write([]byte(ToRespBulkStringArray(PSYNC, "?", "-1")))
 	psyncResponseExpected := BuildPsyncResponse(strings.Repeat("*", REPLICA_ID_LENGTH)) // Slaves have no visibility of master IDs on startup.
 	psyncResponse, err := BufioRead(reader, psyncResponseExpected)
 	if err != nil {

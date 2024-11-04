@@ -79,7 +79,7 @@ func ToRespBulkString(s string) string {
 	}, "")
 }
 
-func ToRespArrayString(args ...string) string {
+func ToRespBulkStringArray(args ...string) string {
 	respArrayString := ARRAY + strconv.Itoa(len(args)) + PROTOCOL_TERMINATOR
 
 	for _, item := range args {
@@ -87,6 +87,16 @@ func ToRespArrayString(args ...string) string {
 	}
 
 	return respArrayString
+}
+
+func ConcatIntoRespArray(items []string) string {
+	respArray := ARRAY + strconv.Itoa(len(items)) + PROTOCOL_TERMINATOR
+
+	for _, item := range items {
+		respArray += item
+	}
+
+	return respArray
 }
 
 func StreamItemsToRespArray(s []Stream) string {
@@ -101,7 +111,7 @@ func StreamItemsToRespArray(s []Stream) string {
 			entries = append(entries, k, v.(string))
 		}
 
-		respArray += ToRespArrayString(entries...)
+		respArray += ToRespBulkStringArray(entries...)
 	}
 
 	return respArray
