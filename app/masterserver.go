@@ -139,7 +139,6 @@ func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn, t *
 			result = ToRespError(fmt.Errorf("%s without %s", EXEC, MULTI))
 		} else {
 			result = t.ExecTransaction(r)
-			fmt.Println("result", result)
 		}
 
 		_, err := conn.Write([]byte(result))
@@ -147,6 +146,22 @@ func (r *RedisMasterServer) RunCommand(cmp CommandComponents, conn net.Conn, t *
 			return err
 		}
 		return nil
+	case DISCARD:
+		result := ""
+
+		if t.Conn == nil {
+			result = ToRespError(fmt.Errorf("%s without %s", DISCARD, MULTI))
+		} else {
+			t.Reset()
+			result, _ = respCommand.Execute(args, r)
+		}
+
+		_, err := conn.Write([]byte(result))
+		if err != nil {
+			return err
+		}
+		return nil
+
 	default:
 		if t.Conn != nil {
 			t.EnqueueCommand(cmp)

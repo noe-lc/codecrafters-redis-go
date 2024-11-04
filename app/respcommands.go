@@ -31,6 +31,7 @@ const (
 	INCR     = "INCR"
 	MULTI    = "MULTI"
 	EXEC     = "EXEC"
+	DISCARD  = "DISCARD"
 )
 
 // Command types --
@@ -542,6 +543,11 @@ var (
 			return "", nil
 		},
 	}
+	Discard = RespCommand{
+		Execute: func(args []string, rs RedisServer) (string, error) {
+			return ToRespSimpleString(OK), nil
+		},
+	}
 )
 
 var RespCommands = map[string]RespCommand{
@@ -562,6 +568,7 @@ var RespCommands = map[string]RespCommand{
 	INCR:     Incr,
 	MULTI:    Multi,
 	EXEC:     Exec,
+	DISCARD:  Discard,
 }
 
 var CommandFlags = map[string]string{
